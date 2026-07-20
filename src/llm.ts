@@ -94,8 +94,8 @@ ${compact || "当天没有采集到可用操作记录。"}`;
 
 export async function writeSummaryReport(kind: "weekly" | "monthly", label: string, sourceReports: Array<{ date: string; content: string }>, settings: Settings, secrets: Secrets) {
   const reportName = kind === "weekly" ? "周报" : "月报";
-  const sources = sourceReports.map(item => `\n===== ${item.date} =====\n${item.content}`).join("\n").slice(0, 80_000);
-  const prompt = `你是资深项目负责人。请依据下方已经生成并核验过的工作日报，撰写 ${label} 的中文${reportName}。
+  const sources = sourceReports.map(item => `\n===== ${item.date} =====\n${item.content.slice(0, 3500)}`).join("\n").slice(0, 50_000);
+  const context = `你是资深项目负责人。请依据下方已经生成并核验过的工作日报，撰写 ${label} 的中文${reportName}。
 
 写作要求：
 1. 按项目与工作主题归并，不按日期逐日复述，不写操作流水账。
@@ -104,17 +104,18 @@ export async function writeSummaryReport(kind: "weekly" | "monthly", label: stri
 4. 只写来源日报能够支持的事实，不得虚构完成状态、指标、结论或计划。
 5. 不输出“下一步计划”“后续计划”“留痕说明”“数据完整性”等章节。
 6. 只使用标题、自然段和列表；禁止粗体、斜体、代码、表格、链接以及 **、__、反引号等 Markdown 行内标记。
-7. 内容要有总结性和管理视角，周报约 1800–3000 个中文字符，月报约 2500–4500 个中文字符。
-
-严格使用以下结构：
-# ${label} ${reportName}
-## 本期概览
-## 项目进展与成果
-### 项目或工作主题（按实际项目重复）
-## 关键问题与判断
-## 本期状态
+7. 内容要有总结性和管理视角，避免机械重复日报原句。
 
 来源日报：
 ${sources || "本周期没有可用日报。"}`;
-  return callModel(prompt, settings, secrets, kind === "weekly" ? 2400 : 3600);
+  const withoutSectionHeading = (text: string) => text.trim().replace(/^#{1,2}\s+[^\n]+\n+/, "");
+  const section = async (instruction: string, maxTokens: number) => {
+    try { return await callModel(`${context}\n\n${instruction}`, settings, secrets, maxTokens); }
+    catch { return callModel(`${context}\n\n${instruction}\n请改为高度精炼版本，控制在 450 个中文字符以内。`, settings, secrets, Math.min(maxTokens, 450)); }
+  };
+  const overview = withoutSectionHeading(await section("只写“本期概览”的正文，不输出标题。概括本期主要方向、投入重点和总体成果，约 300–500 个中文字符。", 500));
+  const projects = withoutSectionHeading(await section("只写“项目进展与成果”的内容。按真实项目设置“### 项目名称”标题，合并跨日进展，写清目标、推进过程、关键成果和期末状态，总计约 1000–1600 个中文字符。", 900));
+  const judgements = withoutSectionHeading(await section("只写“关键问题与判断”的正文，不输出标题。归纳本期重要问题、原因判断和决策依据，约 300–500 个中文字符。", 480));
+  const status = withoutSectionHeading(await section("只写“本期状态”的正文，不输出标题。按项目准确总结本期结束时的状态，不写未来计划，约 250–400 个中文字符。", 400));
+  return `# ${label} ${reportName}\n\n## 本期概览\n\n${overview}\n\n## 项目进展与成果\n\n${projects}\n\n## 关键问题与判断\n\n${judgements}\n\n## 本期状态\n\n${status}`;
 }
