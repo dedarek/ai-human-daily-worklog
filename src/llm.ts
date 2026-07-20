@@ -1,0 +1,120 @@
+import type { Activity, Secrets, Settings } from "./types.js";
+import { spawn } from "node:child_process";
+
+async function curlPost(url: string, headers: Record<string, string>, payload: object) {
+  return new Promise<{ status: number; text: string }>((resolve, reject) => {
+    const args = ["-sS", "--max-time", "180", "-X", "POST", url, "-w", "\n%{http_code}", "--data-binary", "@-"];
+    for (const [name, value] of Object.entries(headers)) args.push("-H", `${name}: ${value}`);
+    const child = spawn("/usr/bin/curl", args, { stdio: ["pipe", "pipe", "pipe"] });
+    let stdout = "", stderr = "";
+    child.stdout.on("data", chunk => stdout += chunk);
+    child.stderr.on("data", chunk => stderr += chunk);
+    child.on("error", reject);
+    child.on("close", code => {
+      if (code !== 0) return reject(new Error(stderr.trim() || `curl exited ${code}`));
+      const split = stdout.lastIndexOf("\n"); resolve({ status: Number(stdout.slice(split + 1)), text: stdout.slice(0, split) });
+    });
+    child.stdin.end(JSON.stringify(payload));
+  });
+}
+async function fetchPost(url: string, headers: Record<string, string>, payload: object) {
+  const response = await fetch(url, { method: "POST", headers, body: JSON.stringify(payload), signal: AbortSignal.timeout(240_000) });
+  return { status: response.status, text: await response.text() };
+}
+
+async function callModel(prompt: string, settings: Settings, secrets: Secrets, maxTokens = 1800) {
+  if (!secrets.llmApiKey) throw new Error("请先在设置中填写 LLM API Key。");
+  const base = settings.llmBaseUrl.replace(/\/$/, "");
+  const url = settings.llmProtocol === "anthropic" ? `${base}/v1/messages` : `${base}/chat/completions`;
+  const headers: Record<string, string> = settings.llmProtocol === "anthropic"
+    ? { "Content-Type": "application/json", "x-api-key": secrets.llmApiKey, "anthropic-version": "2023-06-01" }
+    : { "Content-Type": "application/json", Authorization: `Bearer ${secrets.llmApiKey}` };
+  let response: { status: number; text: string } | undefined;
+  let lastError: any;
+  for (let attempt = 1; attempt <= 3; attempt++) {
+    try {
+      const payload = { model: settings.llmModel, messages: [{ role: "user", content: prompt }], temperature: 0.2, max_tokens: maxTokens };
+      response = settings.llmProtocol === "openai" ? await fetchPost(url, headers, payload) : await curlPost(url, headers, payload);
+      break;
+    }
+    catch (error: any) {
+      lastError = error;
+      if (attempt < 3) await new Promise(resolve => setTimeout(resolve, attempt * 3000));
+    }
+  }
+  if (!response) throw new Error(`LLM 网络请求失败（已重试 3 次）：${lastError?.cause?.message ?? lastError?.message ?? String(lastError)}`);
+  if (response.status < 200 || response.status >= 300) throw new Error(`LLM 请求失败：${response.status} ${response.text}`);
+  const body: any = JSON.parse(response.text);
+  return settings.llmProtocol === "anthropic"
+    ? body.content?.filter((item: any) => item.type === "text").map((item: any) => item.text).join("\n") || "模型没有返回报告内容。"
+    : body.choices?.[0]?.message?.content as string || "模型没有返回报告内容。";
+}
+
+export async function writeReport(date: string, activities: Activity[], settings: Settings, secrets: Secrets, verifiedFacts: string[] = []) {
+  if (!secrets.llmApiKey) throw new Error("请先在设置中填写 LLM API Key。");
+  const sourceSummary = [...activities.reduce((map, item) => map.set(item.process, (map.get(item.process) ?? 0) + 1), new Map<string, number>())]
+    .sort((a, b) => b[1] - a[1]).map(([name, count]) => `${name}: ${count} 条`).join("；");
+  const seen = new Set<string>(); const groups = new Map<string, Activity[]>();
+  for (const x of activities) {
+    const key = `${x.process}|${x.message.slice(0, 160)}`;
+    if (seen.has(key)) continue; seen.add(key);
+    const group = groups.get(x.process) ?? []; group.push(x); groups.set(x.process, group);
+  }
+  const quota = (process: string) => process === "Claude Code" ? 14 : process === "Codex" ? 12 : process === "Terminal" ? 8 : 1;
+  const selected: Activity[] = [];
+  for (const [process, items] of groups) {
+    const limit = Math.min(quota(process), items.length);
+    if (limit === items.length) selected.push(...items);
+    else for (let i = 0; i < limit; i++) selected.push(items[Math.floor(i * (items.length - 1) / Math.max(1, limit - 1))]);
+  }
+  selected.sort((a, b) => a.timestamp.localeCompare(b.timestamp));
+  const compact = selected.slice(0, 45).map(x => `${x.evidenceId} | ${x.timestamp} | ${x.process} | ${x.message.replace(/[\u0000-\u001F\u007F]/g, " ").slice(0, 200)}`).join("\n");
+  const context = `你是资深项目负责人，仅依据操作留痕撰写 ${date} 的工作日报。
+
+共同规则：
+1. 按项目与工作主题归并，不按时间、命令或工具调用写流水账。
+2. Claude Code、Codex、终端只是采集来源，不是工作主体，不突出工具名称。
+3. 只写证据能够支持的事实；不得虚构完成、归档、上线、指标、设计或结论。
+4. 不写下一步计划、后续计划、留痕说明或数据完整性。
+5. 不暴露密钥、个人信息、证据 ID、完整源码或模型对话。
+6. 禁止粗体、斜体、代码、表格、链接以及 **、__、反引号等 Markdown 行内标记。
+7. 写作规则不是工作证据，不得把规则本身写入日报。
+
+来源统计：${sourceSummary || "无"}
+系统验证事实：${verifiedFacts.join("；") || "无"}
+操作留痕：
+${compact || "当天没有采集到可用操作记录。"}`;
+  const withoutSectionHeading = (text: string) => text.trim().replace(/^#{1,2}\s+[^\n]+\n+/, "");
+  const overview = withoutSectionHeading(await callModel(`${context}\n\n只写“工作概览”的正文，不要输出标题。用一至两个自然段概括主要项目、核心工作和当天总体成果，约 250–400 个中文字符。`, settings, secrets, 420));
+  const projects = withoutSectionHeading(await callModel(`${context}\n\n只写“项目进展与产出”的内容。每个真实项目以“### 项目名称”为标题，随后用连贯自然段写清目标、分析或实施过程、解决的问题与已确认结果。不要机械使用“背景：”“过程：”“状态：”标签。总计约 900–1400 个中文字符。`, settings, secrets, 850));
+  const judgements = withoutSectionHeading(await callModel(`${context}\n\n只写“关键问题与判断”的正文，不要输出标题。归纳最重要的问题、原因判断与决策依据，避免重复项目进展，约 250–450 个中文字符。`, settings, secrets, 420));
+  const status = withoutSectionHeading(await callModel(`${context}\n\n只写“当前状态”的正文，不要输出标题。按项目准确说明截至当天 18:00 已完成、已验证、仍在处理的状态；系统验证事实优先，约 200–350 个中文字符。`, settings, secrets, 350));
+  return `# ${date} 工作日志\n\n## 工作概览\n\n${overview}\n\n## 项目进展与产出\n\n${projects}\n\n## 关键问题与判断\n\n${judgements}\n\n## 当前状态\n\n${status}`;
+}
+
+export async function writeSummaryReport(kind: "weekly" | "monthly", label: string, sourceReports: Array<{ date: string; content: string }>, settings: Settings, secrets: Secrets) {
+  const reportName = kind === "weekly" ? "周报" : "月报";
+  const sources = sourceReports.map(item => `\n===== ${item.date} =====\n${item.content}`).join("\n").slice(0, 80_000);
+  const prompt = `你是资深项目负责人。请依据下方已经生成并核验过的工作日报，撰写 ${label} 的中文${reportName}。
+
+写作要求：
+1. 按项目与工作主题归并，不按日期逐日复述，不写操作流水账。
+2. 提炼本周期的目标、推进过程、关键产出、重要判断、问题解决情况与期末状态；相同事项跨多日出现时合并为一条完整进展。
+3. Claude Code、Codex、终端等只是信息来源，不是工作主体，不要突出工具名称或单设 AI 协作章节。
+4. 只写来源日报能够支持的事实，不得虚构完成状态、指标、结论或计划。
+5. 不输出“下一步计划”“后续计划”“留痕说明”“数据完整性”等章节。
+6. 只使用标题、自然段和列表；禁止粗体、斜体、代码、表格、链接以及 **、__、反引号等 Markdown 行内标记。
+7. 内容要有总结性和管理视角，周报约 1800–3000 个中文字符，月报约 2500–4500 个中文字符。
+
+严格使用以下结构：
+# ${label} ${reportName}
+## 本期概览
+## 项目进展与成果
+### 项目或工作主题（按实际项目重复）
+## 关键问题与判断
+## 本期状态
+
+来源日报：
+${sources || "本周期没有可用日报。"}`;
+  return callModel(prompt, settings, secrets, kind === "weekly" ? 2400 : 3600);
+}
