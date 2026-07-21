@@ -9,6 +9,7 @@
     "start": "tsx src/server.ts",
     "check": "tsc --noEmit",
     "doctor": "node scripts/doctor.mjs",
+    "build-native": "./scripts/build-native.sh",
     "install-service": "./scripts/install-launch-agent.sh"
   },
   "engines": { "node": ">=20" },

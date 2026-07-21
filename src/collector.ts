@@ -15,6 +15,7 @@ function inWindow(timestamp: string, timezone: string, startHour: number, endHou
 export async function collect(date: string, settings: Settings, window = { startHour: 8, endHour: 18 }) {
   const input = join(dataDir, "operations", date, "frontmost.jsonl");
   const terminalInput = join(dataDir, "operations", date, "terminal.jsonl");
+  const meetingInput = join(dataDir, "operations", date, "meetings.jsonl");
   let rows: Operation[] = [];
   try { rows = (await readFile(input, "utf8")).trim().split("\n").filter(Boolean).map(line => JSON.parse(line)); } catch { /* no samples recorded */ }
   const seen = new Set<string>();
@@ -26,6 +27,10 @@ export async function collect(date: string, settings: Settings, window = { start
     const commands = (await readFile(terminalInput, "utf8")).trim().split("\n").filter(Boolean).map(line => JSON.parse(line) as { timestamp: string; cwd: string; command: string; evidenceId: string });
     activities.push(...commands.filter(command => inWindow(command.timestamp, settings.timezone, window.startHour, window.endHour)).map(command => ({ timestamp: command.timestamp, process: "Terminal", message: `命令：${command.command}${command.cwd ? `（目录：${command.cwd}）` : ""}`, evidenceId: command.evidenceId })));
   } catch { /* no terminal commands recorded */ }
+  try {
+    const meetings = (await readFile(meetingInput, "utf8")).trim().split("\n").filter(Boolean).map(line => JSON.parse(line) as Activity);
+    activities.push(...meetings.filter(item => inWindow(item.timestamp, settings.timezone, window.startHour, window.endHour)));
+  } catch { /* no Teams meetings recorded */ }
   activities.push(...(await collectAgentActivities(date, settings)).filter(item => inWindow(item.timestamp, settings.timezone, window.startHour, window.endHour)));
   activities.sort((a, b) => a.timestamp.localeCompare(b.timestamp));
   const raw = activities.map(x => JSON.stringify(x)).join("\n") + (activities.length ? "\n" : "");

@@ -21,6 +21,12 @@ export const defaults: Settings = {
   feishuBaseUrl: "https://feishu.cn",
   feishuWikiNodeToken: "",
   titlePrefix: "工作日志",
+  teamsMeetingEnabled: true,
+  teamsAutoRecord: true,
+  teamsAudioDevice: "Microsoft Teams Audio",
+  teamsMicrophoneDevice: "",
+  whisperCliPath: "/opt/homebrew/bin/whisper-cli",
+  whisperModelPath: join(dataDir, "models", "ggml-small.bin"),
 };
 
 export async function setupStore() { await mkdir(dataDir, { recursive: true }); }

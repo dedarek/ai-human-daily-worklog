@@ -50,6 +50,37 @@ async function callModel(prompt: string, settings: Settings, secrets: Secrets, m
     : body.choices?.[0]?.message?.content as string || "模型没有返回报告内容。";
 }
 
+export async function writeMeetingMinutes(title: string, startedAt: string, endedAt: string, transcript: string, settings: Settings, secrets: Secrets) {
+  const cleanTranscript = transcript.replace(/[\u0000-\u001F\u007F]/g, " ").trim().slice(0, 80_000);
+  if (!cleanTranscript) throw new Error("会议录音中没有识别到可用语音，无法生成纪要。");
+  const prompt = `你是专业的会议纪要整理人员。仅依据下面的 Microsoft Teams 会议逐字稿生成中文会议纪要。
+
+会议标题：${title}
+开始时间：${startedAt}
+结束时间：${endedAt}
+
+要求：
+1. 按讨论主题归并，不按说话顺序复述，不虚构参会人姓名、决定或待办。
+2. 区分讨论意见、已经明确的结论和明确分配的行动项；无法确认负责人或期限时写“未明确”，不要猜测。
+3. 忽略寒暄、口头语、识别噪声和重复内容。
+4. 不提及录音、转写模型、AI、证据或留痕。
+5. 只使用以下结构；禁止粗体、斜体、表格、代码、链接和 Markdown 行内标记：
+
+# ${title}
+## 会议信息
+- 时间：${startedAt} 至 ${endedAt}
+- 平台：Microsoft Teams
+## 会议概览
+## 讨论内容
+### 真实讨论主题
+## 关键结论与决策
+## 待办事项
+
+逐字稿：
+${cleanTranscript}`;
+  return (await callModel(prompt, settings, secrets, 1800)).trim();
+}
+
 export async function writeReport(date: string, activities: Activity[], settings: Settings, secrets: Secrets, verifiedFacts: string[] = []) {
   if (!secrets.llmApiKey) throw new Error("请先在设置中填写 LLM API Key。");
   const sourceSummary = [...activities.reduce((map, item) => map.set(item.process, (map.get(item.process) ?? 0) + 1), new Map<string, number>())]
@@ -60,7 +91,7 @@ export async function writeReport(date: string, activities: Activity[], settings
     if (seen.has(key)) continue; seen.add(key);
     const group = groups.get(x.process) ?? []; group.push(x); groups.set(x.process, group);
   }
-  const quota = (process: string) => process === "Claude Code" ? 14 : process === "Codex" ? 12 : process === "Terminal" ? 8 : 1;
+  const quota = (process: string) => process === "Teams Meeting" ? 16 : process === "Claude Code" ? 14 : process === "Codex" ? 12 : process === "Terminal" ? 8 : 1;
   const selected: Activity[] = [];
   for (const [process, items] of groups) {
     const limit = Math.min(quota(process), items.length);
@@ -68,7 +99,7 @@ export async function writeReport(date: string, activities: Activity[], settings
     else for (let i = 0; i < limit; i++) selected.push(items[Math.floor(i * (items.length - 1) / Math.max(1, limit - 1))]);
   }
   selected.sort((a, b) => a.timestamp.localeCompare(b.timestamp));
-  const compact = selected.slice(0, 45).map(x => `${x.evidenceId} | ${x.timestamp} | ${x.process} | ${x.message.replace(/[\u0000-\u001F\u007F]/g, " ").slice(0, 200)}`).join("\n");
+  const compact = selected.slice(0, 55).map(x => `${x.evidenceId} | ${x.timestamp} | ${x.process} | ${x.message.replace(/[\u0000-\u001F\u007F]/g, " ").slice(0, x.process === "Teams Meeting" ? 1200 : 200)}`).join("\n");
   const context = `你是资深项目负责人，仅依据操作留痕撰写 ${date} 的工作日报。
 
 共同规则：

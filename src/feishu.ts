@@ -54,7 +54,7 @@ export async function resolveWikiTarget(url: string, settings: Settings) {
   return { nodeToken: node.node_token as string, spaceId: node.space_id as string, title: node.title as string, origin, binary };
 }
 
-export async function publishReport(date: string, report: string, settings: Settings, _secrets: Secrets, existingDocumentId?: string, kind: "daily" | "weekly" | "monthly" = "daily", customTitle?: string) {
+export async function publishReport(date: string, report: string, settings: Settings, _secrets: Secrets, existingDocumentId?: string, kind: "daily" | "weekly" | "monthly" | "meeting" = "daily", customTitle?: string) {
   const title = customTitle ?? `${settings.titlePrefix} - ${date}`;
   let documentId = existingDocumentId;
   if (!documentId) {

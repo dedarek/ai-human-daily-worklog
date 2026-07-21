@@ -1,6 +1,6 @@
 # Mac Worklog → 飞书
 
-一个只在本机运行的 macOS 工作留痕工具。它在工作时间采集前台应用、终端命令以及 Claude Code / Codex 的结构化执行记录，调用可配置的 LLM 整理成日报，并通过飞书 CLI 以用户身份写入飞书知识库。
+一个只在本机运行的 macOS 工作留痕工具。它在工作时间采集有效操作和 Microsoft Teams 会议，在本机完成会议转写，调用可配置的 LLM 整理成日报与会议纪要，并通过飞书 CLI 以用户身份写入飞书知识库。
 
 ## 能做什么
 
@@ -10,6 +10,8 @@
 - 每月 1 日 08:10 汇总上月工作日，生成月报。
 - 按“月 → 周 → 日报”组织飞书知识库。
 - 前端查看配置状态、最近执行结果并手动生成日报。
+- 自动识别新版 Microsoft Teams 会议，采集会议声音与麦克风，并使用本地 Whisper 模型转写。
+- 会议结束后创建独立飞书会议纪要，把讨论内容、结论和待办纳入当日日报。
 - LLM API Key 保存在 macOS Keychain；活动记录和文档索引保存在本机 `data/`。
 - 使用 LaunchAgent 登录自启并在异常退出后自动恢复。
 
@@ -28,6 +30,8 @@
 - macOS
 - Node.js 20+
 - 飞书 CLI
+- FFmpeg
+- whisper.cpp 与 GGML Whisper 模型
 
 ```bash
 npm install -g @larksuite/cli
@@ -45,6 +49,7 @@ lark-cli auth status --json --verify
 git clone <repository-url>
 cd mac-worklog-feishu
 npm install
+npm run build-native
 npm start
 ```
 
@@ -54,12 +59,23 @@ npm start
 2. 填写 LLM 协议、API 地址、模型和 API Key；
 3. 粘贴目标飞书知识库父页面链接并绑定；
 4. 保存配置，点击“立即生成今天日报”完成首次验证。
+5. 在“Teams 会议”中启用会议采集，确认页面显示 Teams 已就绪。
 
 可以运行诊断命令检查安装状态：
 
 ```bash
 npm run doctor
 ```
+
+首次安装 Teams 转写依赖：
+
+```bash
+brew install ffmpeg whisper-cpp
+mkdir -p data/models
+curl -L -o data/models/ggml-small.bin https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-small.bin
+```
+
+新版 Teams 自带的 `Microsoft Teams Audio` 虚拟设备用于捕获会议声音，当前默认麦克风用于捕获自己的发言。首次录音时 macOS 可能要求麦克风权限。系统结合 Teams 音频设备活动和会议窗口判断会议开始与结束，页面始终提供手动开始和停止按钮作为特殊通话的兜底。
 
 ## 保持后台运行
 
@@ -77,10 +93,12 @@ npm run install-service
 - `data/operations/`：前台应用采样和终端命令；
 - `data/evidence/`：结构化证据与校验清单；
 - `data/reports/`：生成后的本地报告副本；
+- `data/meetings/`：Teams 会议录音、逐字稿与会议纪要；
+- `data/models/`：本地 Whisper 模型；
 - `data/published.json`、`data/wiki-index.json`：飞书文档和目录索引；
 - LLM API Key：仅存储于 macOS Keychain。
 
-操作记录会发送到你配置的 LLM 服务用于生成报告。请根据所用服务商的数据政策决定是否启用，以及是否需要进一步脱敏。
+操作记录和会议逐字稿会发送到你配置的 LLM 服务，用于生成报告与会议纪要；原始会议音频不会发送给 LLM，也不会上传飞书。请根据所用服务商的数据政策决定是否启用，以及是否需要进一步脱敏。
 
 ## 项目结构
 
@@ -92,7 +110,9 @@ src/
   feishu.ts      知识库层级与文档发布
   llm.ts         日报、周报和月报生成
   sampler.ts     macOS 前台应用采样
+  teamsMeeting.ts Teams 自动检测、录音、转写和纪要发布
   server.ts      本地 API、定时任务和前端服务
+native/          Teams 音频活动检测器
 public/          本地配置与运行历史页面
 scripts/         自检、终端采集和 LaunchAgent 安装
 ```

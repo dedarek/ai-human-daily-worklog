@@ -10,6 +10,7 @@ import { writeReport, writeSummaryReport } from "./llm.js";
 import { sampleOperation } from "./sampler.js";
 import { dataDir, getSecrets, getSettings, logRun, saveSecrets, saveSettings, setupStore } from "./store.js";
 import type { Settings } from "./types.js";
+import { getTeamsMeetingStatus, listTeamsMeetings, startTeamsMeeting, startTeamsMonitor, stopTeamsMeeting } from "./teamsMeeting.js";
 
 const app = express(); app.use(express.json({ limit: "100kb" })); app.use(express.static(join(process.cwd(), "public")));
 let tasks: ScheduledTask[] = [];
@@ -87,7 +88,12 @@ async function schedule() {
 app.get("/api/settings", async (_req, res) => res.json(await getSettings()));
 app.post("/api/settings", async (req, res) => {
   const old = await getSettings(); const body = req.body as Partial<Settings> & { llmApiKey?: string };
-  const settings: Settings = { ...old, ...body, ignoredProcesses: Array.isArray(body.ignoredProcesses) ? body.ignoredProcesses : old.ignoredProcesses };
+  const settings: Settings = {
+    ...old, ...body,
+    ignoredProcesses: Array.isArray(body.ignoredProcesses) ? body.ignoredProcesses : old.ignoredProcesses,
+    teamsMeetingEnabled: body.teamsMeetingEnabled === true,
+    teamsAutoRecord: body.teamsAutoRecord === true,
+  };
   delete (settings as any).llmApiKey;
   for (const key of ["feishuAppId", "feishuAppSecret", "feishuFolderToken", "feishuWikiSpaceId"]) delete (settings as any)[key];
   await saveSettings(settings); await saveSecrets(body); await schedule(); res.json({ ok: true });
@@ -118,18 +124,22 @@ app.post("/api/run-summary", async (req, res) => {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(start) || !/^\d{4}-\d{2}-\d{2}$/.test(end)) return res.status(400).json({ error: "请提供正确的开始和结束日期。" });
   try { res.json(await runSummary(kind, start, end, Boolean(req.body?.force ?? true))); } catch (error) { await logRun({ status: "failed", kind, start, end, error: String(error) }); res.status(400).json({ error: String(error) }); }
 });
+app.get("/api/meeting/status", async (_req, res) => { try { res.json(await getTeamsMeetingStatus()); } catch (error) { res.status(400).json({ error: String(error) }); } });
+app.get("/api/meetings", async (_req, res) => res.json(await listTeamsMeetings()));
+app.post("/api/meeting/start", async (req, res) => { try { res.json(await startTeamsMeeting("manual", String(req.body?.title ?? ""))); } catch (error) { res.status(400).json({ error: String(error) }); } });
+app.post("/api/meeting/stop", async (_req, res) => { try { res.json(await stopTeamsMeeting()); } catch (error) { res.status(400).json({ error: String(error) }); } });
 app.get("/api/status", async (_req, res) => {
   const settings = await getSettings(); const runs = join(dataDir, "runs.jsonl");
-  const reportRuns = existsSync(runs) ? (await readFile(runs, "utf8")).trim().split("\n").filter(Boolean).flatMap(line => { try { const entry = JSON.parse(line); return String(entry.status).startsWith("sample_") ? [] : [entry]; } catch { return []; } }) : [];
+  const reportRuns = existsSync(runs) ? (await readFile(runs, "utf8")).trim().split("\n").filter(Boolean).flatMap(line => { try { const entry = JSON.parse(line); return String(entry.status).startsWith("sample_") || entry.status === "meeting_recording" ? [] : [entry]; } catch { return []; } }) : [];
   res.json({ running: true, schedule: settings.schedule, weeklySchedule: "0 8 * * 1", monthlySchedule: "10 8 1 * *", workWindow: "08:00-18:00", timezone: settings.timezone, dataPath: dataDir, lastRun: reportRuns.at(-1) ?? null });
 });
 app.get("/api/runs", async (_req, res) => {
   const file = join(dataDir, "runs.jsonl");
   if (!existsSync(file)) return res.json([]);
-  const entries = (await readFile(file, "utf8")).trim().split("\n").filter(Boolean).flatMap(line => { try { const entry = JSON.parse(line); return String(entry.status).startsWith("sample_") ? [] : [entry]; } catch { return []; } });
+  const entries = (await readFile(file, "utf8")).trim().split("\n").filter(Boolean).flatMap(line => { try { const entry = JSON.parse(line); return String(entry.status).startsWith("sample_") || entry.status === "meeting_recording" ? [] : [entry]; } catch { return []; } });
   res.json(entries.slice(-12).reverse());
 });
-await setupStore(); await schedule();
+await setupStore(); await schedule(); startTeamsMonitor();
 setInterval(() => getSettings().then(sampleOperation).catch(error => logRun({ status: "sample_failed", error: String(error) })), 60_000);
 getSettings().then(sampleOperation).catch(error => logRun({ status: "sample_failed", error: String(error) }));
 app.listen(4318, "127.0.0.1", () => console.log("Mac Worklog is running at http://127.0.0.1:4318"));
