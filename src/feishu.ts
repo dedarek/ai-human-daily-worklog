@@ -57,12 +57,20 @@ export async function resolveWikiTarget(url: string, settings: Settings) {
 
 export async function publishReport(date: string, report: string, settings: Settings, _secrets: Secrets, existingDocumentId?: string, kind: "daily" | "weekly" | "monthly" | "meeting" = "daily", customTitle?: string) {
   const title = customTitle ?? dailyTitle(date);
-  let documentId = existingDocumentId;
-  if (!documentId) {
+  const createFresh = async () => {
     const parent = kind === "monthly" ? await wikiMonthParent(date, settings) : await wikiParent(date, settings);
-    documentId = (await createWikiDoc(parent, title, settings)).obj_token;
+    return (await createWikiDoc(parent, title, settings)).obj_token as string;
+  };
+  let documentId = existingDocumentId ?? await createFresh();
+  try {
+    await overwriteDocument(documentId, report, settings);
+  } catch (error) {
+    // WHY 自愈：目标文档被用户删除/移入回收站后无法再覆盖，此时重建一篇而非整体失败。
+    if (existingDocumentId && /deleted|no longer be edited|trash|not\s*exist|not\s*found|permission/i.test(String(error))) {
+      documentId = await createFresh();
+      await overwriteDocument(documentId, report, settings);
+    } else throw error;
   }
-  await overwriteDocument(documentId, report, settings);
   const base = (settings.feishuBaseUrl || "https://feishu.cn").replace(/\/$/, "");
   return { title, url: `${base}/docx/${documentId}`, documentId };
 }
