@@ -7,7 +7,7 @@ import { writeReport, writeSummaryReport, sourceSummaryLine } from "./llm.js";
 import { dataDir, getSecrets, getSettings, logRun } from "./store.js";
 import { readJson, updateJson, createMutex } from "./jsonStore.js";
 import { workdays } from "./time.js";
-import { weeklyTitle, monthlyTitle } from "./titles.js";
+import { dailyTitle, weeklyTitle, monthlyTitle } from "./titles.js";
 import { dailyXml, summaryXml } from "./render.js";
 
 type PublishedEntry = { documentId?: string; url?: string; title?: string; [key: string]: unknown };
@@ -28,7 +28,7 @@ export function run(date: string, force = false) {
       ? ["该日期日报此前已成功写入飞书，本次运行是在原文档上覆盖更新；不得写成飞书写入链路尚未打通。"]
       : [];
     const report = await writeReport(date, activities, settings, secrets, verifiedFacts);
-    const xml = dailyXml(report, { date, sourceSummary: sourceSummaryLine(activities) });
+    const xml = dailyXml(report, { date, title: dailyTitle(date), sourceSummary: sourceSummaryLine(activities) });
     const doc = await publishReport(date, xml, settings, secrets, publishedIndex[date]?.documentId);
     const reportDir = join(dataDir, "reports"); await mkdir(reportDir, { recursive: true });
     await writeFile(join(reportDir, `${date}.md`), report, { mode: 0o600 });
@@ -53,7 +53,7 @@ export function runSummary(kind: "weekly" | "monthly", start: string, end: strin
     const label = kind === "weekly" ? `${start} 至 ${end}` : `${start.slice(0, 4)} 年 ${Number(start.slice(5, 7))} 月`;
     const title = kind === "weekly" ? weeklyTitle(start, end) : monthlyTitle(start);
     const report = await writeSummaryReport(kind, label, sourceReports, settings, secrets);
-    const doc = await publishReport(start, summaryXml(report, { label }), settings, secrets, publishedIndex[key]?.documentId, kind, title);
+    const doc = await publishReport(start, summaryXml(report, { label, title }), settings, secrets, publishedIndex[key]?.documentId, kind, title);
     const reportDir = join(dataDir, "reports"); await mkdir(reportDir, { recursive: true });
     const filename = kind === "weekly" ? `weekly-${start}.md` : `monthly-${start.slice(0, 7)}.md`;
     await writeFile(join(reportDir, filename), report, { mode: 0o600 });

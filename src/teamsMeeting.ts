@@ -177,7 +177,7 @@ async function transcribeAndPublish(record: MeetingRecord) {
     const report = await writeMeetingMinutes(record.title, record.startedAt, record.endedAt!, transcript, settings, secrets);
     await writeFile(record.reportPath!, report, { mode: 0o600 });
     const date = localDate(record.startedAt, settings.timezone);
-    const document = await publishReport(date, meetingXml(report), settings, secrets, record.documentId, "meeting", record.title);
+    const document = await publishReport(date, meetingXml(report, record.title), settings, secrets, record.documentId, "meeting", record.title);
     Object.assign(record, document, { status: "published", summaryPreview: extractSection(report, "会议概览").slice(0, 300) });
     await appendMeetingActivities(record, report, settings.timezone);
     await saveMeeting(record);

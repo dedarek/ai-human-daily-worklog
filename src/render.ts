@@ -53,10 +53,10 @@ function bodyToXml(body: string): string {
   return out.join("");
 }
 
-// 状态段解析为表格行。兼容两种格式：
-//   新：「名称：状态词；说明。」  旧：「名称：长描述。」（无独立状态词）
-// 项目间以「。」分隔，项目内首个「：」分名称与其余；仅当其余以已知状态词开头才识别状态。
-const KNOWN_STATUS = STATUS_STYLES.flatMap(s => s.words);
+// 状态段解析为表格行。兼容：「名称：状态词，/；说明。」与「名称：长描述。」（无独立状态词）。
+// 项目间以「。」分隔，项目内首个「：」分名称与其余；只要其余以已知状态词开头即识别状态，
+// WHY 不依赖分隔符：LLM 常用「，」而非「；」连接状态词与说明，硬按分号切会误判为无状态。
+const KNOWN_STATUS = [...STATUS_STYLES.flatMap(s => s.words)].sort((a, b) => b.length - a.length);
 
 function parseStatusItems(body: string): Array<{ name: string; status: string; detail: string }> {
   const text = body.replace(/\n+/g, " ").trim();
@@ -68,9 +68,8 @@ function parseStatusItems(body: string): Array<{ name: string; status: string; d
     const name = chunk.slice(0, idx).trim();
     if (!name || name.length > 20) continue;
     const rest = chunk.slice(idx + 1).trim();
-    const head = rest.split(/[；;]/)[0].trim();
-    const isStatus = head.length <= 6 && KNOWN_STATUS.some(w => head.startsWith(w));
-    if (isStatus) items.push({ name, status: head, detail: rest.slice(head.length).replace(/^[；;，,、：:\s]+/, "").trim() });
+    const statusWord = KNOWN_STATUS.find(w => rest.startsWith(w));
+    if (statusWord) items.push({ name, status: statusWord, detail: rest.slice(statusWord.length).replace(/^[；;，,、：:。\s]+/, "").trim() });
     else items.push({ name, status: "", detail: rest });
   }
   return items;
@@ -129,26 +128,32 @@ export function renderDocXml(markdown: string, opts: RenderOpts = {}): string {
   return parts.join("\n");
 }
 
-export function dailyXml(markdown: string, meta: { date: string; sourceSummary?: string }): string {
-  const source = (meta.sourceSummary ?? "").slice(0, 200);
+export function dailyXml(markdown: string, meta: { date: string; title?: string; sourceSummary?: string }): string {
+  // 只展示前若干主要来源，避免头部冗长与中途截断。
+  const sources = (meta.sourceSummary ?? "").split("；").map(s => s.trim()).filter(Boolean);
+  const shown = sources.slice(0, 8).join("；");
+  const source = shown ? `${shown}${sources.length > 8 ? " 等" : ""}` : "";
   const header = `日期：${meta.date}${source ? `　·　留痕来源：${source}` : ""}`;
   return renderDocXml(markdown, {
+    title: meta.title,
     header,
     calloutHeadings: ["工作概览"],
     tableHeadings: ["当前状态"],
   });
 }
 
-export function summaryXml(markdown: string, meta: { label: string }): string {
+export function summaryXml(markdown: string, meta: { label: string; title?: string }): string {
   return renderDocXml(markdown, {
+    title: meta.title,
     header: `周期：${meta.label}`,
     calloutHeadings: ["本期概览"],
     tableHeadings: ["本期状态"],
   });
 }
 
-export function meetingXml(markdown: string): string {
+export function meetingXml(markdown: string, title?: string): string {
   return renderDocXml(markdown, {
+    title,
     calloutHeadings: ["会议概览"],
     checkboxHeadings: ["待办事项"],
   });
