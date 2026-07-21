@@ -95,13 +95,17 @@ export async function writeReport(date: string, activities: Activity[], settings
     if (seen.has(key)) continue; seen.add(key);
     const group = groups.get(x.process) ?? []; group.push(x); groups.set(x.process, group);
   }
-  const quota = new Map<string, number>([["Teams Meeting", 16], ["Copilot", 16], ["ZCode", 14], ["Claude Code", 14], ["Codex", 12], ["Terminal", 8]]);
+  // 分两类喂给模型：对话/提问/任务/会议是「做了什么」的真实信号，全量保留；
+  // 工具动作是「怎么做的」流水（rule 2 明确非工作主体），去重后按来源限量，避免撑爆有限上下文。
+  const agentSources = new Set(["Teams Meeting", "Copilot", "ZCode", "Claude Code", "Codex", "Terminal"]);
+  const isConversation = (a: Activity) => a.process === "Teams Meeting" || /^(提问|讨论|任务)[:：]/.test(a.message);
+  const TOOL_CAP = 24;
   const selected: Activity[] = [];
   for (const [process, items] of groups) {
-    if (quota.has(process)) {
-      const limit = Math.min(quota.get(process)!, items.length);
-      if (limit === items.length) selected.push(...items);
-      else for (let i = 0; i < limit; i++) selected.push(items[Math.floor(i * (items.length - 1) / Math.max(1, limit - 1))]);
+    if (agentSources.has(process)) {
+      const convo = items.filter(isConversation);
+      const tools = items.filter(it => !isConversation(it)).slice(0, TOOL_CAP);
+      selected.push(...convo, ...tools);
     } else {
       // 非 agent 应用：把不同窗口标题聚合成一行，保留浏览器调研等主题又不淹没核心证据。
       const titles = [...new Set(items.map(it => it.message.replace(/^前台窗口：/, "").trim()).filter(t => t && t !== "前台应用处于活跃状态"))].slice(0, 12);
@@ -109,8 +113,8 @@ export async function writeReport(date: string, activities: Activity[], settings
     }
   }
   selected.sort((a, b) => a.timestamp.localeCompare(b.timestamp));
-  const width = (process: string) => process === "Teams Meeting" ? 1200 : (process === "Copilot" || process === "ZCode") ? 400 : quota.has(process) ? 200 : 500;
-  const compact = selected.slice(0, 60).map(x => `${x.evidenceId} | ${x.timestamp} | ${x.process} | ${x.message.replace(/[\u0000-\u001F\u007F]/g, " ").slice(0, width(x.process))}`).join("\n");
+  const width = (a: Activity) => a.process === "Teams Meeting" ? 1200 : isConversation(a) ? 360 : agentSources.has(a.process) ? 180 : 500;
+  const compact = selected.slice(0, 200).map(x => `${x.evidenceId} | ${x.timestamp} | ${x.process} | ${x.message.replace(/[\u0000-\u001F\u007F]/g, " ").slice(0, width(x))}`).join("\n");
   const context = `你是资深项目负责人，仅依据操作留痕撰写 ${date} 的工作日报。
 
 共同规则：
