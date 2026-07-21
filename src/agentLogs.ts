@@ -1,15 +1,29 @@
-import { readdir, readFile } from "node:fs/promises";
+import { readdir, readFile, stat } from "node:fs/promises";
 import { join } from "node:path";
 import type { Activity, Settings } from "./types.js";
 
 const home = process.env.HOME || "/Users/mac";
 
-const redact = (text: string) => text
+export const redact = (text: string) => text
   .replace(/(sk-[A-Za-z0-9_-]{8,}|Bearer\s+)[A-Za-z0-9._-]+/gi, "$1[REDACTED]")
   .replace(/((?:api[_-]?key|token|secret|password|passwd|authorization)\s*[=:]\s*)[^\s;,}]+/gi, "$1[REDACTED]")
   .replace(/(--(?:api[_-]?key|token|secret|password)(?:=|\s+))[^\s]+/gi, "$1[REDACTED]");
 
-function localDate(timestamp: string, timezone: string) {
+// 从各 agent 日志提取真实用户提问时，剔除系统注入内容（环境上下文、命令回显、工具结果、元消息）与低信号短语。
+const STOP_PROMPTS = new Set(["继续", "ok", "好的", "嗯", "是的", "可以", "行", "对", "yes", "y", "go", "next", "对的", "嗯嗯"]);
+export function cleanPrompt(text: unknown): string {
+  const raw = String(text ?? "").replace(/\s+/g, " ").trim();
+  if (!raw || raw.length < 3) return "";
+  if (raw.startsWith("<") || raw.startsWith("[")) return "";
+  // WHY：ChatGPT/Codex app 常把上一轮助手输出/上下文回显塞进 user turn，这类以 markdown 列表/强调符开头，非用户真实提问。
+  if (/^[•*#>]/.test(raw) || /^[-–—]\s/.test(raw)) return "";
+  if (/^#\s*(Files|环境|Caveat)/i.test(raw)) return "";
+  if (/^(command-name|local-command|environment_context|system-reminder)/i.test(raw)) return "";
+  if (STOP_PROMPTS.has(raw.toLowerCase())) return "";
+  return raw;
+}
+
+export function localDate(timestamp: string, timezone: string) {
   const value = new Date(timestamp);
   if (Number.isNaN(value.getTime())) return "";
   return new Intl.DateTimeFormat("en-CA", { timeZone: timezone, year: "numeric", month: "2-digit", day: "2-digit" }).format(value);
@@ -47,7 +61,13 @@ async function claudeActivities(date: string, settings: Settings): Promise<Activ
       if (!line) continue;
       try {
         const row = JSON.parse(line); const timestamp = row.timestamp;
-        if (!timestamp || localDate(timestamp, settings.timezone) !== date || row.type !== "assistant") continue;
+        if (!timestamp || localDate(timestamp, settings.timezone) !== date) continue;
+        if (row.type === "user" && !row.isMeta && typeof row.message?.content === "string") {
+          const prompt = cleanPrompt(row.message.content);
+          if (prompt) activities.push({ timestamp, process: "Claude Code", message: `提问：${redact(prompt).slice(0, 400)}`, evidenceId: `claude-ask-${row.uuid ?? activities.length}` });
+          continue;
+        }
+        if (row.type !== "assistant") continue;
         for (const item of Array.isArray(row.message?.content) ? row.message.content : []) {
           if (item?.type !== "tool_use" || !item.name || !usefulTools.has(item.name)) continue;
           activities.push({ timestamp, process: "Claude Code", message: redact(claudeDetail(item.name, item.input)).slice(0, 600), evidenceId: `claude-${item.id ?? activities.length}` });
@@ -72,14 +92,23 @@ function codexDetail(payload: any) {
 
 async function codexActivities(date: string, settings: Settings): Promise<Activity[]> {
   const activities: Activity[] = [];
-  const [year, month, day] = date.split("-");
-  for (const file of await jsonlFiles(join(home, ".codex", "sessions", year, month, day))) {
+  // WHY 扫全部 rollout 而非当天目录：ChatGPT/Codex app 会在已有线程里继续对话，
+  // 而 rollout 文件按线程「创建日」命名，今天的消息常被追加进旧日期文件。用 mtime 剪枝再逐行按 timestamp 过滤。
+  const cutoff = Date.parse(`${date}T00:00:00Z`) - 24 * 3600 * 1000;
+  for (const file of await jsonlFiles(join(home, ".codex", "sessions"))) {
+    try { if ((await stat(file)).mtimeMs < cutoff) continue; } catch { continue; }
     let lines: string[]; try { lines = (await readFile(file, "utf8")).split("\n"); } catch { continue; }
     for (const line of lines) {
       if (!line) continue;
       try {
         const row = JSON.parse(line); const payload = row.payload ?? {};
         if (!row.timestamp || localDate(row.timestamp, settings.timezone) !== date || row.type !== "response_item") continue;
+        if (payload.type === "message" && payload.role === "user") {
+          const text = (Array.isArray(payload.content) ? payload.content : []).map((c: any) => c?.text ?? "").join(" ");
+          const prompt = cleanPrompt(text);
+          if (prompt) activities.push({ timestamp: row.timestamp, process: "Codex", message: `提问：${redact(prompt).slice(0, 400)}`, evidenceId: `codex-ask-${payload.id ?? activities.length}` });
+          continue;
+        }
         if (!["custom_tool_call", "function_call"].includes(payload.type)) continue;
         activities.push({ timestamp: row.timestamp, process: "Codex", message: codexDetail(payload).slice(0, 600), evidenceId: `codex-${payload.call_id ?? payload.id ?? activities.length}` });
       } catch { /* ignore malformed lines */ }

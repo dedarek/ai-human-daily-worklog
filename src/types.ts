@@ -1,5 +1,7 @@
 export type Settings = {
   schedule: string;
+  weeklySchedule: string;
+  monthlySchedule: string;
   timezone: string;
   ignoredProcesses: string[];
   llmBaseUrl: string;
@@ -8,7 +10,6 @@ export type Settings = {
   larkCliPath?: string;
   feishuBaseUrl?: string;
   feishuWikiNodeToken?: string;
-  titlePrefix: string;
   teamsMeetingEnabled: boolean;
   teamsAutoRecord: boolean;
   teamsAudioDevice: string;

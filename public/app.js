@@ -45,7 +45,7 @@ async function load() {
     else if (element) element.value = key === "ignoredProcesses" ? value.join("\n") : value || "";
   }
   $("#state").textContent = setup.ready ? "配置完整，后台正在运行" : "后台运行中，初始化尚未完成";
-  $("#meta").textContent = `工作日 18:00 日报 · 周一 08:00 周报 · 每月 1 日 08:10 月报（${status.timezone}）`;
+  $("#meta").textContent = `日报 ${status.schedule} · 周报 ${status.weeklySchedule} · 月报 ${status.monthlySchedule}（${status.timezone}）`;
   const lark = setup.lark;
   $("#larkStatus").innerHTML = lark.installed
     ? `<b>已连接：${escapeHtml(lark.user?.userName || lark.identity || "飞书用户")}</b><small>CLI ${lark.verified ? "认证有效" : "需要重新授权"} · ${escapeHtml(lark.binary)}</small>`

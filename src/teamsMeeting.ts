@@ -7,6 +7,10 @@ import { promisify } from "node:util";
 import { publishReport } from "./feishu.js";
 import { writeMeetingMinutes } from "./llm.js";
 import { dataDir, getSecrets, getSettings, logRun } from "./store.js";
+import { readJson, updateJson } from "./jsonStore.js";
+import { hasMeetingSignal, isMeetingWindow } from "./meetingDetect.js";
+import { meetingTitle } from "./titles.js";
+import { meetingXml } from "./render.js";
 import type { MeetingRecord, Settings } from "./types.js";
 
 const exec = promisify(execFile);
@@ -27,6 +31,7 @@ type RuntimeStatus = {
   teamsAudioInstalled: boolean;
   teamsAudioRunning: boolean;
   meetingWindowDetected: boolean;
+  callActivityDetected: boolean;
   windowTitles: string[];
   current: MeetingRecord | null;
   lastError?: string;
@@ -46,6 +51,7 @@ let lastStatus: RuntimeStatus = {
   teamsAudioInstalled: false,
   teamsAudioRunning: false,
   meetingWindowDetected: false,
+  callActivityDetected: false,
   windowTitles: [],
   current: null,
 };
@@ -59,15 +65,15 @@ function localTime(iso: string, timezone: string) {
 }
 
 async function loadMeetings(): Promise<MeetingRecord[]> {
-  try { return JSON.parse(await readFile(meetingsFile, "utf8")); } catch { return []; }
+  return readJson<MeetingRecord[]>(meetingsFile, []);
 }
 
 async function saveMeeting(record: MeetingRecord) {
-  const records = await loadMeetings();
-  const index = records.findIndex(item => item.id === record.id);
-  if (index >= 0) records[index] = record; else records.push(record);
-  await mkdir(dataDir, { recursive: true });
-  await writeFile(meetingsFile, JSON.stringify(records.slice(-100), null, 2), { mode: 0o600 });
+  await updateJson<MeetingRecord[]>(meetingsFile, [], records => {
+    const index = records.findIndex(item => item.id === record.id);
+    if (index >= 0) records[index] = record; else records.push({ ...record });
+    return records.slice(-100);
+  });
 }
 
 async function audioStatus(): Promise<AudioStatus> {
@@ -87,12 +93,17 @@ end tell`;
   } catch { return []; }
 }
 
-function isMeetingWindow(titles: string[]) {
-  return titles.some(title => /(?:^|[|｜·\-\s])(会议|通话|呼叫|meeting|call)(?:$|[|｜·\-\s])/i.test(title) && !/聊天|chat/i.test(title));
-}
-
 async function teamsRunning() {
   try { await exec("/usr/bin/pgrep", ["-x", "MSTeams"], { timeout: 3000 }); return true; } catch { return false; }
+}
+
+// 通话辅助进程信号：新版 Teams 通话/会议期间会拉起 CallMonitor 等辅助进程，
+// 该信号独立于窗口标题与音频设备命名，可作为会议判定的兜底证据。
+async function callHelperRunning() {
+  for (const pattern of ["CallMonitor", "Teams.*Call", "vpaudio"]) {
+    try { await exec("/usr/bin/pgrep", ["-if", pattern], { timeout: 3000 }); return true; } catch { /* not running */ }
+  }
+  return false;
 }
 
 function ffmpegPath() {
@@ -166,7 +177,7 @@ async function transcribeAndPublish(record: MeetingRecord) {
     const report = await writeMeetingMinutes(record.title, record.startedAt, record.endedAt!, transcript, settings, secrets);
     await writeFile(record.reportPath!, report, { mode: 0o600 });
     const date = localDate(record.startedAt, settings.timezone);
-    const document = await publishReport(date, report, settings, secrets, record.documentId, "meeting", record.title);
+    const document = await publishReport(date, meetingXml(report), settings, secrets, record.documentId, "meeting", record.title);
     Object.assign(record, document, { status: "published", summaryPreview: extractSection(report, "会议概览").slice(0, 300) });
     await appendMeetingActivities(record, report, settings.timezone);
     await saveMeeting(record);
@@ -182,7 +193,7 @@ export async function startTeamsMeeting(origin: "automatic" | "manual" = "manual
   const settings = await getSettings(); const startedAt = new Date().toISOString();
   const id = `${localDate(startedAt, settings.timezone)}-${startedAt.slice(11, 19).replace(/:/g, "")}-${randomUUID().slice(0, 6)}`;
   const dir = join(dataDir, "meetings", id); await mkdir(dir, { recursive: true });
-  const title = requestedTitle?.trim() || `Teams 会议 - ${localDate(startedAt, settings.timezone)} ${localTime(startedAt, settings.timezone)}`;
+  const title = meetingTitle(localDate(startedAt, settings.timezone), localTime(startedAt, settings.timezone), requestedTitle);
   const record: MeetingRecord = {
     id, provider: "Microsoft Teams", title, status: "recording", startedAt, origin,
     audioPath: join(dir, "audio.wav"), transcriptPath: join(dir, "transcript.txt"), reportPath: join(dir, "minutes.md"),
@@ -208,12 +219,23 @@ async function poll() {
   if (polling) return; polling = true;
   try {
     const settings = await getSettings();
-    const [audio, titles, running] = await Promise.all([audioStatus(), teamsWindowTitles(), teamsRunning()]);
+    const [audio, titles, running, callHelper] = await Promise.all([audioStatus(), teamsWindowTitles(), teamsRunning(), callHelperRunning()]);
     const meetingWindowDetected = isMeetingWindow(titles);
-    lastStatus = { monitoring: settings.teamsMeetingEnabled, teamsInstalled: running, teamsAudioInstalled: audio.teamsAudioInstalled, teamsAudioRunning: audio.teamsAudioRunning, meetingWindowDetected, windowTitles: titles, current };
+    const signals = { audioRunning: audio.teamsAudioRunning, meetingWindow: meetingWindowDetected, callHelper };
+    const meetingSignal = running && hasMeetingSignal(signals);
+    lastStatus = {
+      monitoring: settings.teamsMeetingEnabled,
+      teamsInstalled: running,
+      teamsAudioInstalled: audio.teamsAudioInstalled,
+      teamsAudioRunning: audio.teamsAudioRunning,
+      meetingWindowDetected,
+      callActivityDetected: callHelper,
+      windowTitles: titles,
+      current,
+    };
     if (!settings.teamsMeetingEnabled || !settings.teamsAutoRecord) { startSignals = 0; return; }
     if (!current) {
-      startSignals = audio.teamsAudioRunning || meetingWindowDetected ? startSignals + 1 : 0;
+      startSignals = meetingSignal ? startSignals + 1 : 0;
       if (startSignals >= 2) { startSignals = 0; await startTeamsMeeting("automatic"); meetingWindowSeen = meetingWindowDetected; }
       return;
     }
@@ -225,15 +247,39 @@ async function poll() {
   finally { polling = false; }
 }
 
+// 启动时清理进程重启遗留的非终态会议：录音无法恢复直接标记失败；
+// 转写/整理阶段若音频仍在则续跑，否则标记失败，避免记录永久卡住。
+export async function recoverMeetings() {
+  const records = await loadMeetings();
+  for (const record of records) {
+    if (record.status === "recording") {
+      record.status = "failed";
+      record.error = "服务重启导致录音中断，无法恢复该会议。";
+      if (!record.endedAt) record.endedAt = new Date().toISOString();
+      await saveMeeting(record);
+    } else if (record.status === "transcribing" || record.status === "summarizing") {
+      if (record.audioPath && existsSync(record.audioPath) && record.endedAt) {
+        record.status = "transcribing"; await saveMeeting(record);
+        void transcribeAndPublish(record);
+      } else {
+        record.status = "failed";
+        record.error = "服务重启导致转写中断，且缺少可用录音，无法恢复。";
+        await saveMeeting(record);
+      }
+    }
+  }
+}
+
 export function startTeamsMonitor() {
   if (monitorTimer) clearInterval(monitorTimer);
   lastStatus.monitoring = true;
+  void recoverMeetings().catch(error => void logRun({ status: "failed", kind: "meeting", error: `恢复历史会议失败：${String(error)}` }));
   monitorTimer = setInterval(() => void poll(), 5000);
   void poll();
 }
 
-export async function getTeamsMeetingStatus() {
-  await poll(); return { ...lastStatus, current };
+export function getTeamsMeetingStatus() {
+  return { ...lastStatus, current };
 }
 
 export async function listTeamsMeetings() {

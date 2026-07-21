@@ -81,35 +81,48 @@ ${cleanTranscript}`;
   return (await callModel(prompt, settings, secrets, 1800)).trim();
 }
 
+export function sourceSummaryLine(activities: Activity[]) {
+  return [...activities.reduce((map, item) => map.set(item.process, (map.get(item.process) ?? 0) + 1), new Map<string, number>())]
+    .sort((a, b) => b[1] - a[1]).map(([name, count]) => `${name}: ${count} 条`).join("；");
+}
+
 export async function writeReport(date: string, activities: Activity[], settings: Settings, secrets: Secrets, verifiedFacts: string[] = []) {
   if (!secrets.llmApiKey) throw new Error("请先在设置中填写 LLM API Key。");
-  const sourceSummary = [...activities.reduce((map, item) => map.set(item.process, (map.get(item.process) ?? 0) + 1), new Map<string, number>())]
-    .sort((a, b) => b[1] - a[1]).map(([name, count]) => `${name}: ${count} 条`).join("；");
+  const sourceSummary = sourceSummaryLine(activities);
   const seen = new Set<string>(); const groups = new Map<string, Activity[]>();
   for (const x of activities) {
     const key = `${x.process}|${x.message.slice(0, 160)}`;
     if (seen.has(key)) continue; seen.add(key);
     const group = groups.get(x.process) ?? []; group.push(x); groups.set(x.process, group);
   }
-  const quota = (process: string) => process === "Teams Meeting" ? 16 : process === "Claude Code" ? 14 : process === "Codex" ? 12 : process === "Terminal" ? 8 : 1;
+  const quota = new Map<string, number>([["Teams Meeting", 16], ["Copilot", 16], ["ZCode", 14], ["Claude Code", 14], ["Codex", 12], ["Terminal", 8]]);
   const selected: Activity[] = [];
   for (const [process, items] of groups) {
-    const limit = Math.min(quota(process), items.length);
-    if (limit === items.length) selected.push(...items);
-    else for (let i = 0; i < limit; i++) selected.push(items[Math.floor(i * (items.length - 1) / Math.max(1, limit - 1))]);
+    if (quota.has(process)) {
+      const limit = Math.min(quota.get(process)!, items.length);
+      if (limit === items.length) selected.push(...items);
+      else for (let i = 0; i < limit; i++) selected.push(items[Math.floor(i * (items.length - 1) / Math.max(1, limit - 1))]);
+    } else {
+      // 非 agent 应用：把不同窗口标题聚合成一行，保留浏览器调研等主题又不淹没核心证据。
+      const titles = [...new Set(items.map(it => it.message.replace(/^前台窗口：/, "").trim()).filter(t => t && t !== "前台应用处于活跃状态"))].slice(0, 12);
+      selected.push({ timestamp: items[0].timestamp, process, evidenceId: items[0].evidenceId, message: titles.length ? `使用 ${process}，涉及：${titles.join("；")}` : `${process} 处于活跃状态` });
+    }
   }
   selected.sort((a, b) => a.timestamp.localeCompare(b.timestamp));
-  const compact = selected.slice(0, 55).map(x => `${x.evidenceId} | ${x.timestamp} | ${x.process} | ${x.message.replace(/[\u0000-\u001F\u007F]/g, " ").slice(0, x.process === "Teams Meeting" ? 1200 : 200)}`).join("\n");
+  const width = (process: string) => process === "Teams Meeting" ? 1200 : (process === "Copilot" || process === "ZCode") ? 400 : quota.has(process) ? 200 : 500;
+  const compact = selected.slice(0, 60).map(x => `${x.evidenceId} | ${x.timestamp} | ${x.process} | ${x.message.replace(/[\u0000-\u001F\u007F]/g, " ").slice(0, width(x.process))}`).join("\n");
   const context = `你是资深项目负责人，仅依据操作留痕撰写 ${date} 的工作日报。
 
 共同规则：
 1. 按项目与工作主题归并，不按时间、命令或工具调用写流水账。
 2. Claude Code、Codex、终端只是采集来源，不是工作主体，不突出工具名称。
 3. 只写证据能够支持的事实；不得虚构完成、归档、上线、指标、设计或结论。
-4. 不写下一步计划、后续计划、留痕说明或数据完整性。
+4. 不写下一步计划、后续计划、留痕说明或数据完整性。也不要把本系统自身的动作当作工作成果，包括：生成/写入/覆盖日报、周报、月报或会议纪要、同步到飞书知识库、留痕采集等，这些一律不写入报告。
 5. 不暴露密钥、个人信息、证据 ID、完整源码或模型对话。
 6. 禁止粗体、斜体、代码、表格、链接以及 **、__、反引号等 Markdown 行内标记。
 7. 写作规则不是工作证据，不得把规则本身写入日报。
+8. 不得给出留痕中未出现的具体数字、比例、指标；无法从留痕直接确认的原因、鉴权细节或因果结论不要臆测。
+9. 只写与本职工作相关的内容。与工作无关的个人事务一律不写入日报，包括：语言/外语学习、看剧看视频、娱乐、游戏、炒股与证券行情、购物、社交闲聊、私人财务、健身、新闻资讯浏览等。若某条留痕无法判断是否与工作相关，宁可略去，不要为凑内容而纳入。日常邮件、团队沟通、会议、行政/人事流程属于工作，可以保留。
 
 来源统计：${sourceSummary || "无"}
 系统验证事实：${verifiedFacts.join("；") || "无"}
@@ -118,8 +131,8 @@ ${compact || "当天没有采集到可用操作记录。"}`;
   const withoutSectionHeading = (text: string) => text.trim().replace(/^#{1,2}\s+[^\n]+\n+/, "");
   const overview = withoutSectionHeading(await callModel(`${context}\n\n只写“工作概览”的正文，不要输出标题。用一至两个自然段概括主要项目、核心工作和当天总体成果，约 250–400 个中文字符。`, settings, secrets, 420));
   const projects = withoutSectionHeading(await callModel(`${context}\n\n只写“项目进展与产出”的内容。每个真实项目以“### 项目名称”为标题，随后用连贯自然段写清目标、分析或实施过程、解决的问题与已确认结果。不要机械使用“背景：”“过程：”“状态：”标签。总计约 900–1400 个中文字符。`, settings, secrets, 850));
-  const judgements = withoutSectionHeading(await callModel(`${context}\n\n只写“关键问题与判断”的正文，不要输出标题。归纳最重要的问题、原因判断与决策依据，避免重复项目进展，约 250–450 个中文字符。`, settings, secrets, 420));
-  const status = withoutSectionHeading(await callModel(`${context}\n\n只写“当前状态”的正文，不要输出标题。按项目准确说明截至当天 18:00 已完成、已验证、仍在处理的状态；系统验证事实优先，约 200–350 个中文字符。`, settings, secrets, 350));
+  const judgements = withoutSectionHeading(await callModel(`${context}\n\n只写“关键问题与判断”的正文，不要输出标题。仅归纳操作留痕能直接支撑的问题、原因判断与决策依据，避免重复项目进展；若留痕没有体现明确的问题、冲突或决策，只写一句“当天留痕未体现明确的关键问题或决策”，不要为凑内容而臆测原因、数据或结论。约 200–450 个中文字符。`, settings, secrets, 420));
+  const status = withoutSectionHeading(await callModel(`${context}\n\n只写“当前状态”的正文，不要输出标题。用状态词（已完成、已验证、进行中、受阻、待确认）逐个项目概括截至当天 18:00 的状态，每个项目一句，不要重复“项目进展与产出”的过程描述；系统验证事实优先。约 150–300 个中文字符。`, settings, secrets, 320));
   return `# ${date} 工作日志\n\n## 工作概览\n\n${overview}\n\n## 项目进展与产出\n\n${projects}\n\n## 关键问题与判断\n\n${judgements}\n\n## 当前状态\n\n${status}`;
 }
 
@@ -136,6 +149,7 @@ export async function writeSummaryReport(kind: "weekly" | "monthly", label: stri
 5. 不输出“下一步计划”“后续计划”“留痕说明”“数据完整性”等章节。
 6. 只使用标题、自然段和列表；禁止粗体、斜体、代码、表格、链接以及 **、__、反引号等 Markdown 行内标记。
 7. 内容要有总结性和管理视角，避免机械重复日报原句。
+8. 不得给出来源日报中未出现的具体数字、比例或指标；无法确认的原因或结论不要臆测。
 
 来源日报：
 ${sources || "本周期没有可用日报。"}`;

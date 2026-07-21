@@ -109,12 +109,21 @@ src/
   larkCli.ts     飞书 CLI 调用、认证状态和错误处理
   feishu.ts      知识库层级与文档发布
   llm.ts         日报、周报和月报生成
+  render.ts      报告 Markdown → 飞书富文档 XML（高亮框/彩色状态表格/待办勾选框）
+  titles.ts      飞书文档标题统一命名（纯函数，可单测）
   sampler.ts     macOS 前台应用采样
-  teamsMeeting.ts Teams 自动检测、录音、转写和纪要发布
-  server.ts      本地 API、定时任务和前端服务
+  meetingDetect.ts Teams 会议标题与信号识别（纯函数，可单测）
+  teamsMeeting.ts Teams 自动检测、录音、转写、纪要发布与崩溃恢复
+  reportRunner.ts 日报/周报/月报生成流程（串行执行）
+  scheduler.ts   基于配置的 cron 定时任务
+  routes.ts      本地 HTTP 接口
+  jsonStore.ts   按文件串行的 JSON 读写
+  time.ts        日期与时间窗纯函数
+  server.ts      装配 Express、定时任务与采样
 native/          Teams 音频活动检测器
 public/          本地配置与运行历史页面
 scripts/         自检、终端采集和 LaunchAgent 安装
+test/            纯函数单元测试（node:test）
 ```
 
 ## 常见问题
@@ -142,5 +151,6 @@ CLI 会在下一次用户 API 调用时自动刷新仍有效的登录态。如�
 ```bash
 npm run dev
 npm run check
+npm test
 node --check public/app.js
 ```

@@ -8,6 +8,7 @@
     "dev": "tsx src/server.ts",
     "start": "tsx src/server.ts",
     "check": "tsc --noEmit",
+    "test": "node --import tsx --test test/*.test.ts",
     "doctor": "node scripts/doctor.mjs",
     "build-native": "./scripts/build-native.sh",
     "install-service": "./scripts/install-launch-agent.sh"
