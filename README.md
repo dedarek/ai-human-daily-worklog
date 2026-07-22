@@ -1,6 +1,6 @@
 # Mac Worklog → 飞书
 
-一个只在本机运行的 macOS 工作留痕工具。它在工作时间采集有效操作和 Microsoft Teams 会议，在本机完成会议转写，调用可配置的 LLM 整理成日报与会议纪要，并通过飞书 CLI 以用户身份写入飞书知识库。
+一个只在本机运行的 macOS 工作留痕工具。它在工作时间采集有效操作和 Microsoft Teams 会议，在本机完成会议转写，调用可配置的 LLM 统一整理成日报，并通过飞书 CLI 以用户身份写入飞书知识库。
 
 ## 能做什么
 
@@ -11,7 +11,7 @@
 - 按“月 → 周 → 日报”组织飞书知识库。
 - 前端查看配置状态、最近执行结果并手动生成日报。
 - 自动识别新版 Microsoft Teams 会议，采集会议声音与麦克风，并使用本地 Whisper 模型转写。
-- 会议结束后创建独立飞书会议纪要，把讨论内容、结论和待办纳入当日日报。
+- 会议结束后过滤静音、重复词和识别噪声，把有效讨论、结论和待办作为普通工作内容纳入当日日报，不创建独立会议文档。
 - LLM API Key 保存在 macOS Keychain；活动记录和文档索引保存在本机 `data/`。
 - 使用 LaunchAgent 登录自启并在异常退出后自动恢复。
 
@@ -75,7 +75,7 @@ mkdir -p data/models
 curl -L -o data/models/ggml-small.bin https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-small.bin
 ```
 
-新版 Teams 自带的 `Microsoft Teams Audio` 虚拟设备用于捕获会议声音，当前默认麦克风用于捕获自己的发言。首次录音时 macOS 可能要求麦克风权限。系统结合 Teams 音频设备活动和会议窗口判断会议开始与结束，页面始终提供手动开始和停止按钮作为特殊通话的兜底。
+新版 Teams 自带的 `Microsoft Teams Audio` 虚拟设备用于捕获会议声音，内置麦克风用于捕获自己的发言（避免蓝牙麦克风被 Teams 独占后产生静音）。首次录音时 macOS 可能要求麦克风权限。系统只以真实 Teams 会议窗口触发自动录音，音频设备状态仅用于诊断；页面始终提供手动开始和停止按钮作为特殊通话的兜底。
 
 ## 保持后台运行
 
@@ -98,7 +98,7 @@ npm run install-service
 - `data/published.json`、`data/wiki-index.json`：飞书文档和目录索引；
 - LLM API Key：仅存储于 macOS Keychain。
 
-操作记录和会议逐字稿会发送到你配置的 LLM 服务，用于生成报告与会议纪要；原始会议音频不会发送给 LLM，也不会上传飞书。请根据所用服务商的数据政策决定是否启用，以及是否需要进一步脱敏。
+操作记录和有效会议逐字稿会发送到你配置的 LLM 服务，用于生成日报；原始会议音频不会发送给 LLM，也不会上传飞书。请根据所用服务商的数据政策决定是否启用，以及是否需要进一步脱敏。
 
 ## 项目结构
 
@@ -113,7 +113,7 @@ src/
   titles.ts      飞书文档标题统一命名（纯函数，可单测）
   sampler.ts     macOS 前台应用采样
   meetingDetect.ts Teams 会议标题与信号识别（纯函数，可单测）
-  teamsMeeting.ts Teams 自动检测、录音、转写、纪要发布与崩溃恢复
+  teamsMeeting.ts Teams 自动检测、录音、转写、日报素材写入与崩溃恢复
   reportRunner.ts 日报/周报/月报生成流程（串行执行）
   scheduler.ts   基于配置的 cron 定时任务
   routes.ts      本地 HTTP 接口

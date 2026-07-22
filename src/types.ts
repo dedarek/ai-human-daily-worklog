@@ -35,7 +35,7 @@ export type MeetingRecord = {
   id: string;
   provider: "Microsoft Teams";
   title: string;
-  status: "recording" | "transcribing" | "summarizing" | "published" | "failed";
+  status: "recording" | "transcribing" | "summarizing" | "included" | "ignored" | "published" | "failed";
   startedAt: string;
   endedAt?: string;
   durationSeconds?: number;

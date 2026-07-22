@@ -10,18 +10,18 @@ async function json(url, options) {
 async function loadRuns() {
   const runs = await json("/api/runs");
   $("#runs").innerHTML = runs.length ? runs.map(run => {
-    const label = run.kind === "meeting" ? run.title || "Teams 会议纪要" : run.kind === "weekly" ? `周报 ${run.start} 至 ${run.end}` : run.kind === "monthly" ? `月报 ${run.start?.slice(0, 7) || ""}` : run.date || "—";
+    const label = run.kind === "meeting" ? run.title || "Teams 会议内容" : run.kind === "weekly" ? `周报 ${run.start} 至 ${run.end}` : run.kind === "monthly" ? `月报 ${run.start?.slice(0, 7) || ""}` : run.date || "—";
     const url = run.url || run.document?.url;
-    const result = run.status === "success" ? (run.sourceDays ? `汇总 ${run.sourceDays} 个工作日` : "已生成") : "生成失败";
+    const result = run.status === "meeting_included" ? "已纳入日报素材" : run.status === "meeting_ignored" ? "无有效内容，已忽略" : run.status === "success" ? (run.sourceDays ? `汇总 ${run.sourceDays} 个工作日` : "已生成") : "生成失败";
     return `<article class="run ${escapeHtml(run.status)}"><div><b>${escapeHtml(label)}</b><small>${new Date(run.at).toLocaleString("zh-CN")}</small></div><span>${result}</span>${url ? `<a target="_blank" href="${escapeHtml(url)}">打开文档 ↗</a>` : run.error ? `<em>${escapeHtml(run.error)}</em>` : ""}</article>`;
   }).join("") : '<p class="hint">还没有生成记录。</p>';
 }
 
-const meetingStatusText = value => ({ recording: "正在记录", transcribing: "正在本地转写", summarizing: "正在整理纪要", published: "已写入飞书", failed: "处理失败" })[value] || value;
+const meetingStatusText = value => ({ recording: "正在记录", transcribing: "正在本地转写", summarizing: "正在整理工作内容", included: "已纳入日报素材", ignored: "无有效内容，已忽略", published: "旧版独立纪要", failed: "处理失败" })[value] || value;
 
 async function loadMeetings() {
   const meetings = await json("/api/meetings");
-  $("#meetings").innerHTML = meetings.length ? meetings.map(meeting => `<article class="run ${escapeHtml(meeting.status)}"><div><b>${escapeHtml(meeting.title)}</b><small>${new Date(meeting.startedAt).toLocaleString("zh-CN")} · ${meeting.durationSeconds ? `${Math.max(1, Math.round(meeting.durationSeconds / 60))} 分钟` : meeting.origin === "automatic" ? "自动识别" : "手动记录"}</small></div><span>${escapeHtml(meetingStatusText(meeting.status))}</span>${meeting.url ? `<a target="_blank" href="${escapeHtml(meeting.url)}">打开纪要 ↗</a>` : meeting.error ? `<em title="${escapeHtml(meeting.error)}">${escapeHtml(meeting.error)}</em>` : ""}</article>`).join("") : '<p class="hint">还没有会议记录。</p>';
+  $("#meetings").innerHTML = meetings.length ? meetings.map(meeting => `<article class="run ${escapeHtml(meeting.status)}"><div><b>${escapeHtml(meeting.title)}</b><small>${new Date(meeting.startedAt).toLocaleString("zh-CN")} · ${meeting.durationSeconds ? `${Math.max(1, Math.round(meeting.durationSeconds / 60))} 分钟` : meeting.origin === "automatic" ? "自动识别" : "手动记录"}</small></div><span>${escapeHtml(meetingStatusText(meeting.status))}</span>${meeting.error ? `<em title="${escapeHtml(meeting.error)}">${escapeHtml(meeting.error)}</em>` : ""}</article>`).join("") : '<p class="hint">还没有会议记录。</p>';
 }
 
 async function loadMeetingStatus() {
@@ -80,8 +80,8 @@ $("#meetingStart").addEventListener("click", async () => {
 });
 
 $("#meetingStop").addEventListener("click", async () => {
-  $("#notice").textContent = "正在结束录音；本地转写和飞书纪要会在后台继续处理…";
-  try { await json("/api/meeting/stop", { method: "POST" }); $("#notice").textContent = "录音已结束，正在本地转写。完成后会自动写入飞书。"; await Promise.all([loadMeetingStatus(), loadMeetings()]); }
+  $("#notice").textContent = "正在结束录音；本地转写和内容整理会在后台继续处理…";
+  try { await json("/api/meeting/stop", { method: "POST" }); $("#notice").textContent = "录音已结束，正在本地转写；有效内容会自动纳入今天的日报素材。"; await Promise.all([loadMeetingStatus(), loadMeetings()]); }
   catch (error) { $("#notice").textContent = error.message; }
 });
 

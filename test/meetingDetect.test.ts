@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { isMeetingTitle, isMeetingWindow, hasMeetingSignal } from "../src/meetingDetect.js";
+import { isMeetingTitle, isMeetingWindow, hasMeetingSignal, transcriptQuality } from "../src/meetingDetect.js";
 
 test("识别中文“……中的会议”标题（旧规则漏配的用例）", () => {
   assert.equal(isMeetingTitle("AI安全-Guard模型 中的会议"), true);
@@ -23,8 +23,15 @@ test("排除聊天/日历/通话记录等非会议视图", () => {
   assert.equal(isMeetingTitle(""), false);
 });
 
-test("hasMeetingSignal 任一信号即命中", () => {
+test("自动开始只接受真实会议窗口，不能被采集器音频反向触发", () => {
   assert.equal(hasMeetingSignal({ audioRunning: false, meetingWindow: false, callHelper: false }), false);
-  assert.equal(hasMeetingSignal({ audioRunning: true, meetingWindow: false, callHelper: false }), true);
-  assert.equal(hasMeetingSignal({ audioRunning: false, meetingWindow: false, callHelper: true }), true);
+  assert.equal(hasMeetingSignal({ audioRunning: true, meetingWindow: false, callHelper: false }), false);
+  assert.equal(hasMeetingSignal({ audioRunning: false, meetingWindow: false, callHelper: true }), false);
+  assert.equal(hasMeetingSignal({ audioRunning: false, meetingWindow: true, callHelper: false }), true);
+});
+
+test("过滤重复占位词与识别噪声", () => {
+  assert.equal(transcriptQuality("you ".repeat(100)).valid, false);
+  assert.equal(transcriptQuality("嗯 啊 哦 呃 ".repeat(30)).valid, false);
+  assert.equal(transcriptQuality("我们确认本周先完成接口联调，数据口径由产品负责人今天补充，开发完成后安排一次验收。另一个问题是权限申请尚未通过，需要继续跟进。" ).valid, true);
 });

@@ -4,13 +4,11 @@ import { existsSync } from "node:fs";
 import { appendFile, mkdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { promisify } from "node:util";
-import { publishReport } from "./feishu.js";
 import { writeMeetingMinutes } from "./llm.js";
 import { dataDir, getSecrets, getSettings, logRun } from "./store.js";
 import { readJson, updateJson } from "./jsonStore.js";
-import { hasMeetingSignal, isMeetingWindow } from "./meetingDetect.js";
+import { hasMeetingSignal, isMeetingTitle, isMeetingWindow, transcriptQuality } from "./meetingDetect.js";
 import { meetingTitle } from "./titles.js";
-import { meetingXml } from "./render.js";
 import type { MeetingRecord, Settings } from "./types.js";
 
 const exec = promisify(execFile);
@@ -23,6 +21,7 @@ type AudioStatus = {
   teamsAudioRunning: boolean;
   teamsAudioDevice?: string;
   defaultInputDevice?: string;
+  builtInInputDevice?: string;
 };
 
 type RuntimeStatus = {
@@ -45,6 +44,7 @@ let monitorTimer: NodeJS.Timeout | undefined;
 let startSignals = 0;
 let missingMeetingWindows = 0;
 let meetingWindowSeen = false;
+let automaticCooldownUntil = 0;
 let lastStatus: RuntimeStatus = {
   monitoring: false,
   teamsInstalled: false,
@@ -120,7 +120,9 @@ function shellSafeDevice(value: string) {
 async function startCapture(audioPath: string, settings: Settings) {
   const detected = await audioStatus();
   const teamsDevice = shellSafeDevice(settings.teamsAudioDevice || detected.teamsAudioDevice || "Microsoft Teams Audio");
-  const micDevice = shellSafeDevice(settings.teamsMicrophoneDevice || detected.defaultInputDevice || "");
+  // 蓝牙耳机的麦克风常被 Teams 独占，后台 FFmpeg 会得到数字静音；
+  // 未手动指定时优先使用内置麦克风，保证自己的发言能被可靠采集。
+  const micDevice = shellSafeDevice(settings.teamsMicrophoneDevice || detected.builtInInputDevice || detected.defaultInputDevice || "");
   const inputs = [teamsDevice, ...(micDevice && micDevice !== teamsDevice ? [micDevice] : [])];
   const args: string[] = ["-hide_banner", "-loglevel", "warning"];
   for (const device of inputs) args.push("-thread_queue_size", "1024", "-f", "avfoundation", "-i", `:${device}`);
@@ -131,7 +133,7 @@ async function startCapture(audioPath: string, settings: Settings) {
   child.stderr.on("data", chunk => stderr = (stderr + chunk).slice(-8000));
   recorderClosed = new Promise((resolve, reject) => {
     child.once("error", reject);
-    child.once("close", code => code === 0 || code === 255 ? resolve(code ?? 0) : reject(new Error(stderr.trim() || `FFmpeg 退出码 ${code}`)));
+    child.once("close", code => code === null || code === 0 || code === 255 ? resolve(code ?? 0) : reject(new Error(stderr.trim() || `FFmpeg 退出码 ${code}`)));
   });
   await new Promise<void>((resolve, reject) => {
     const timer = setTimeout(resolve, 1500);
@@ -170,18 +172,42 @@ async function transcribeAndPublish(record: MeetingRecord) {
   try {
     if (!existsSync(settings.whisperCliPath)) throw new Error(`未找到本地转写程序：${settings.whisperCliPath}`);
     if (!existsSync(settings.whisperModelPath)) throw new Error(`未找到本地转写模型：${settings.whisperModelPath}`);
+    const { stderr: volumeLog } = await exec(ffmpegPath(), ["-hide_banner", "-i", record.audioPath!, "-af", "volumedetect", "-f", "null", "-"], { timeout: 180_000, maxBuffer: 4 * 1024 * 1024 });
+    const maxVolume = Number(volumeLog.match(/max_volume:\s*(-?[\d.]+)\s*dB/i)?.[1] ?? "-Infinity");
+    if (!Number.isFinite(maxVolume) || maxVolume <= -80) {
+      record.status = "ignored";
+      record.error = "录音文件全程静音，未纳入日报；请检查 macOS 的麦克风和系统音频录制权限。";
+      await saveMeeting(record);
+      await logRun({ status: "meeting_ignored", kind: "meeting", meetingId: record.id, title: record.title, reason: record.error });
+      return;
+    }
     await exec(settings.whisperCliPath, ["-m", settings.whisperModelPath, "-f", record.audioPath!, "-l", "auto", "-otxt", "-of", transcriptBase, "-nt", "-np"], { timeout: 3_600_000, maxBuffer: 20 * 1024 * 1024 });
     const transcript = (await readFile(record.transcriptPath!, "utf8")).trim();
-    if (transcript.length < 20) throw new Error("会议录音中没有识别到足够的语音内容。");
+    const quality = transcriptQuality(transcript);
+    if (!quality.valid) {
+      record.status = "ignored";
+      record.transcriptPreview = transcript.slice(0, 240);
+      record.error = `${quality.reason}，未纳入日报。`;
+      await saveMeeting(record);
+      await logRun({ status: "meeting_ignored", kind: "meeting", meetingId: record.id, title: record.title, reason: quality.reason });
+      return;
+    }
     record.status = "summarizing"; record.transcriptPreview = transcript.slice(0, 240); await saveMeeting(record);
     const report = await writeMeetingMinutes(record.title, record.startedAt, record.endedAt!, transcript, settings, secrets);
+    if (/^无有效会议内容[。.!！]?$/u.test(report.trim()) || !extractSection(report, "会议概览")) {
+      record.status = "ignored";
+      record.error = "逐字稿无法支撑明确的工作内容，未纳入日报。";
+      await saveMeeting(record);
+      await logRun({ status: "meeting_ignored", kind: "meeting", meetingId: record.id, title: record.title, reason: record.error });
+      return;
+    }
     await writeFile(record.reportPath!, report, { mode: 0o600 });
-    const date = localDate(record.startedAt, settings.timezone);
-    const document = await publishReport(date, meetingXml(report, record.title), settings, secrets, record.documentId, "meeting", record.title);
-    Object.assign(record, document, { status: "published", summaryPreview: extractSection(report, "会议概览").slice(0, 300) });
     await appendMeetingActivities(record, report, settings.timezone);
+    Object.assign(record, { status: "included", summaryPreview: extractSection(report, "会议概览").slice(0, 300) });
+    delete record.documentId;
+    delete record.url;
     await saveMeeting(record);
-    await logRun({ status: "success", kind: "meeting", meetingId: record.id, title: record.title, startedAt: record.startedAt, endedAt: record.endedAt, document });
+    await logRun({ status: "meeting_included", kind: "meeting", meetingId: record.id, title: record.title, startedAt: record.startedAt, endedAt: record.endedAt });
   } catch (error) {
     record.status = "failed"; record.error = String(error); await saveMeeting(record);
     await logRun({ status: "failed", kind: "meeting", meetingId: record.id, title: record.title, error: String(error) });
@@ -209,8 +235,12 @@ export async function stopTeamsMeeting() {
   const record = current; record.endedAt = new Date().toISOString();
   record.durationSeconds = Math.max(0, Math.round((Date.parse(record.endedAt) - Date.parse(record.startedAt)) / 1000));
   record.status = "transcribing"; await saveMeeting(record);
-  recorder.kill("SIGINT");
+  recorder.stdin.write("q\n");
+  const terminate = setTimeout(() => recorder?.kill("SIGTERM"), 3000);
+  const forceKill = setTimeout(() => recorder?.kill("SIGKILL"), 8000);
   try { await recorderClosed; } finally { recorder = null; recorderClosed = null; current = null; }
+  clearTimeout(terminate); clearTimeout(forceKill);
+  automaticCooldownUntil = Date.now() + 2 * 60 * 1000;
   void transcribeAndPublish(record);
   return record;
 }
@@ -235,8 +265,13 @@ async function poll() {
     };
     if (!settings.teamsMeetingEnabled || !settings.teamsAutoRecord) { startSignals = 0; return; }
     if (!current) {
-      startSignals = meetingSignal ? startSignals + 1 : 0;
-      if (startSignals >= 2) { startSignals = 0; await startTeamsMeeting("automatic"); meetingWindowSeen = meetingWindowDetected; }
+      startSignals = meetingSignal && Date.now() >= automaticCooldownUntil ? startSignals + 1 : 0;
+      if (startSignals >= 2) {
+        startSignals = 0;
+        const detectedTitle = titles.find(isMeetingTitle)?.replace(/\s*\|\s*Microsoft Teams\s*$/i, "").replace(/\s*中的会议\s*$/u, "");
+        await startTeamsMeeting("automatic", detectedTitle);
+        meetingWindowSeen = true;
+      }
       return;
     }
     if (meetingWindowDetected) { meetingWindowSeen = true; missingMeetingWindows = 0; }
@@ -250,6 +285,8 @@ async function poll() {
 // 启动时清理进程重启遗留的非终态会议：录音无法恢复直接标记失败；
 // 转写/整理阶段若音频仍在则续跑，否则标记失败，避免记录永久卡住。
 export async function recoverMeetings() {
+  // 服务异常退出时 FFmpeg 可能成为孤儿进程，并持续占用虚拟音频设备。
+  try { await exec("/usr/bin/pkill", ["-KILL", "-f", `${dataDir}/meetings/.*/audio\\.wav`], { timeout: 3000 }); } catch { /* no stale recorder */ }
   const records = await loadMeetings();
   for (const record of records) {
     if (record.status === "recording") {

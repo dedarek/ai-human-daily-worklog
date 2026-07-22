@@ -6,6 +6,7 @@ struct AudioStatus: Codable {
     let teamsAudioRunning: Bool
     let teamsAudioDevice: String?
     let defaultInputDevice: String?
+    let builtInInputDevice: String?
 }
 
 func readString(_ object: AudioObjectID, selector: AudioObjectPropertySelector, scope: AudioObjectPropertyScope = kAudioObjectPropertyScopeGlobal) -> String? {
@@ -34,8 +35,14 @@ guard AudioObjectGetPropertyData(AudioObjectID(kAudioObjectSystemObject), &devic
 
 var teamsName: String? = nil
 var teamsRunning = false
+var builtInInputName: String? = nil
 for device in devices {
-    guard let name = readString(device, selector: kAudioObjectPropertyName), name.localizedCaseInsensitiveContains("Microsoft Teams Audio") else { continue }
+    guard let name = readString(device, selector: kAudioObjectPropertyName) else { continue }
+    if (name.localizedCaseInsensitiveContains("MacBook") &&
+        (name.localizedCaseInsensitiveContains("microphone") || name.localizedCaseInsensitiveContains("麦克风"))) {
+        builtInInputName = name
+    }
+    guard name.localizedCaseInsensitiveContains("Microsoft Teams Audio") else { continue }
     teamsName = name
     var runAddress = AudioObjectPropertyAddress(mSelector: kAudioDevicePropertyDeviceIsRunningSomewhere, mScope: kAudioObjectPropertyScopeGlobal, mElement: kAudioObjectPropertyElementMain)
     var running: UInt32 = 0
@@ -43,7 +50,7 @@ for device in devices {
     if AudioObjectGetPropertyData(device, &runAddress, 0, nil, &runSize, &running) == noErr { teamsRunning = running != 0 }
 }
 
-let output = AudioStatus(teamsAudioInstalled: teamsName != nil, teamsAudioRunning: teamsRunning, teamsAudioDevice: teamsName, defaultInputDevice: defaultInputName())
+let output = AudioStatus(teamsAudioInstalled: teamsName != nil, teamsAudioRunning: teamsRunning, teamsAudioDevice: teamsName, defaultInputDevice: defaultInputName(), builtInInputDevice: builtInInputName)
 let encoder = JSONEncoder()
 encoder.outputFormatting = [.sortedKeys]
 FileHandle.standardOutput.write(try encoder.encode(output))

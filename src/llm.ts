@@ -53,23 +53,22 @@ async function callModel(prompt: string, settings: Settings, secrets: Secrets, m
 export async function writeMeetingMinutes(title: string, startedAt: string, endedAt: string, transcript: string, settings: Settings, secrets: Secrets) {
   const cleanTranscript = transcript.replace(/[\u0000-\u001F\u007F]/g, " ").trim().slice(0, 80_000);
   if (!cleanTranscript) throw new Error("会议录音中没有识别到可用语音，无法生成纪要。");
-  const prompt = `你是专业的会议纪要整理人员。仅依据下面的 Microsoft Teams 会议逐字稿生成中文会议纪要。
+  const time = (iso: string) => new Intl.DateTimeFormat("zh-CN", { timeZone: settings.timezone, hour: "2-digit", minute: "2-digit", hourCycle: "h23" }).format(new Date(iso));
+  const prompt = `你是资深项目负责人。仅依据下面的 Microsoft Teams 会议逐字稿，整理成供当日日报吸收的工作内容。
 
 会议标题：${title}
-开始时间：${startedAt}
-结束时间：${endedAt}
+本地时间：${time(startedAt)} 至 ${time(endedAt)}
 
 要求：
 1. 按讨论主题归并，不按说话顺序复述，不虚构参会人姓名、决定或待办。
 2. 区分讨论意见、已经明确的结论和明确分配的行动项；无法确认负责人或期限时写“未明确”，不要猜测。
 3. 忽略寒暄、口头语、识别噪声和重复内容。
 4. 不提及录音、转写模型、AI、证据或留痕。
-5. 只使用以下结构；禁止粗体、斜体、表格、代码、链接和 Markdown 行内标记：
+5. 内容将作为普通工作证据并入日报，不要写“会议信息”、平台、录音时长或独立纪要的发布说明。
+6. 如果逐字稿只有噪声、重复词或无法支撑业务事实，直接输出“无有效会议内容”，不要编造章节。
+7. 只使用以下结构；禁止粗体、斜体、表格、代码、链接和 Markdown 行内标记：
 
 # ${title}
-## 会议信息
-- 时间：${startedAt} 至 ${endedAt}
-- 平台：Microsoft Teams
 ## 会议概览
 ## 讨论内容
 ### 真实讨论主题
@@ -127,6 +126,7 @@ export async function writeReport(date: string, activities: Activity[], settings
 7. 写作规则不是工作证据，不得把规则本身写入日报。
 8. 不得给出留痕中未出现的具体数字、比例、指标；无法从留痕直接确认的原因、鉴权细节或因果结论不要臆测。
 9. 只写与本职工作相关的内容。与工作无关的个人事务一律不写入日报，包括：语言/外语学习、看剧看视频、娱乐、游戏、炒股与证券行情、购物、社交闲聊、私人财务、健身、新闻资讯浏览等。若某条留痕无法判断是否与工作相关，宁可略去，不要为凑内容而纳入。日常邮件、团队沟通、会议、行政/人事流程属于工作，可以保留。
+10. Teams 会议内容是工作本身的一部分：按其实际项目或议题并入对应项目，不要单设“会议纪要”“Teams 会议”或“工具使用”章节；讨论、结论和行动项仅在证据充分时写入。
 
 来源统计：${sourceSummary || "无"}
 系统验证事实：${verifiedFacts.join("；") || "无"}
