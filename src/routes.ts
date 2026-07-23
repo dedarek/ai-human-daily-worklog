@@ -11,7 +11,7 @@ import { isoDate } from "./time.js";
 import type { Settings } from "./types.js";
 import { getTeamsMeetingStatus, listTeamsMeetings, startTeamsMeeting, stopTeamsMeeting } from "./teamsMeeting.js";
 
-const legacyKeys = ["feishuAppId", "feishuAppSecret", "feishuFolderToken", "feishuWikiSpaceId", "titlePrefix"];
+const legacyKeys = ["feishuAppId", "feishuAppSecret", "feishuFolderToken", "feishuWikiSpaceId", "titlePrefix", "teamsAudioDevice", "teamsMicrophoneDevice"];
 
 async function reportRuns() {
   const file = join(dataDir, "runs.jsonl");

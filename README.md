@@ -10,7 +10,7 @@
 - 每月 1 日 08:10 汇总上月工作日，生成月报。
 - 按“月 → 周 → 日报”组织飞书知识库。
 - 前端查看配置状态、最近执行结果并手动生成日报。
-- 自动识别新版 Microsoft Teams 会议，采集会议声音与麦克风，并使用本地 Whisper 模型转写。
+- 通过 Teams 进程的真实音频活动自动识别通话，直接采集 Mac 播放的系统声音（不使用麦克风），并使用本地 Whisper 模型转写。
 - 会议结束后过滤静音、重复词和识别噪声，把有效讨论、结论和待办作为普通工作内容纳入当日日报，不创建独立会议文档。
 - LLM API Key 保存在 macOS Keychain；活动记录和文档索引保存在本机 `data/`。
 - 使用 LaunchAgent 登录自启并在异常退出后自动恢复。
@@ -75,7 +75,7 @@ mkdir -p data/models
 curl -L -o data/models/ggml-small.bin https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-small.bin
 ```
 
-新版 Teams 自带的 `Microsoft Teams Audio` 虚拟设备用于捕获会议声音，内置麦克风用于捕获自己的发言（避免蓝牙麦克风被 Teams 独占后产生静音）。首次录音时 macOS 可能要求麦克风权限。系统只以真实 Teams 会议窗口触发自动录音，音频设备状态仅用于诊断；页面始终提供手动开始和停止按钮作为特殊通话的兜底。
+项目使用 macOS ScreenCaptureKit 直接采集电脑正在播放的系统声音，不读取麦克风；即使自己全程静音，也能转写其他参会人的发言。首次使用时 macOS 会要求“屏幕与系统音频录制”权限。系统通过 CoreAudio 判断 Teams 进程是否正在进行音频 I/O，窗口标题只用于入会阶段兜底和提取会议名称，不依赖会议标题关键词；页面仍提供手动开始和停止按钮。
 
 ## 保持后台运行
 

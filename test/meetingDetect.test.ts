@@ -25,11 +25,10 @@ test("排除聊天/日历/通话记录等非会议视图", () => {
   assert.equal(isMeetingTitle(""), false);
 });
 
-test("自动开始只接受真实会议窗口，不能被采集器音频反向触发", () => {
-  assert.equal(hasMeetingSignal({ audioRunning: false, meetingWindow: false, callHelper: false }), false);
-  assert.equal(hasMeetingSignal({ audioRunning: true, meetingWindow: false, callHelper: false }), false);
-  assert.equal(hasMeetingSignal({ audioRunning: false, meetingWindow: false, callHelper: true }), false);
-  assert.equal(hasMeetingSignal({ audioRunning: false, meetingWindow: true, callHelper: false }), true);
+test("优先依据 Teams 进程的真实音频活动，窗口标题作为入会阶段兜底", () => {
+  assert.equal(hasMeetingSignal({ teamsCallActive: false, meetingWindow: false }), false);
+  assert.equal(hasMeetingSignal({ teamsCallActive: true, meetingWindow: false }), true);
+  assert.equal(hasMeetingSignal({ teamsCallActive: false, meetingWindow: true }), true);
 });
 
 test("过滤重复占位词与识别噪声", () => {

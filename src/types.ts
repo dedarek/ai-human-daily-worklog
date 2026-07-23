@@ -12,8 +12,6 @@ export type Settings = {
   feishuWikiNodeToken?: string;
   teamsMeetingEnabled: boolean;
   teamsAutoRecord: boolean;
-  teamsAudioDevice: string;
-  teamsMicrophoneDevice: string;
   whisperCliPath: string;
   whisperModelPath: string;
 };

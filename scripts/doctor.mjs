@@ -21,6 +21,7 @@ if (existsSync(settingsFile)) {
   add("知识库目标", Boolean(settings.feishuWikiNodeToken), settings.feishuWikiNodeToken ? "已绑定" : "未绑定");
   add("LLM 配置", Boolean(settings.llmBaseUrl && settings.llmModel), settings.llmModel || "未配置");
   add("Teams 音频检测器", existsSync(join(root, "data", "bin", "teams-audio-status")), existsSync(join(root, "data", "bin", "teams-audio-status")) ? "已生成" : "请运行 npm run build-native");
+  add("系统音频采集器", existsSync(join(root, "data", "bin", "system-audio-capture")), existsSync(join(root, "data", "bin", "system-audio-capture")) ? "已生成" : "请运行 npm run build-native");
   const whisperModelPath = settings.whisperModelPath || join(root, "data", "models", "ggml-small.bin");
   add("Whisper 模型", existsSync(whisperModelPath), whisperModelPath);
 } else add("项目配置", false, "请先启动服务并打开 http://127.0.0.1:4318");

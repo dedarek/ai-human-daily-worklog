@@ -24,8 +24,6 @@ export const defaults: Settings = {
   feishuWikiNodeToken: "",
   teamsMeetingEnabled: true,
   teamsAutoRecord: true,
-  teamsAudioDevice: "Microsoft Teams Audio",
-  teamsMicrophoneDevice: "",
   whisperCliPath: "/opt/homebrew/bin/whisper-cli",
   whisperModelPath: join(dataDir, "models", "ggml-small.bin"),
 };

@@ -21,13 +21,12 @@ export function isMeetingWindow(titles: string[]): boolean {
 }
 
 export type MeetingSignals = {
-  audioRunning: boolean;
+  teamsCallActive: boolean;
   meetingWindow: boolean;
-  callHelper: boolean;
 };
 
 export function hasMeetingSignal(signals: MeetingSignals): boolean {
-  return signals.meetingWindow;
+  return signals.teamsCallActive || signals.meetingWindow;
 }
 
 const NOISE_WORDS = new Set([

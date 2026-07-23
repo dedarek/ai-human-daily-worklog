@@ -31,9 +31,9 @@ async function loadMeetingStatus() {
   $("#meetingStop").disabled = !recording;
   $("#teamsStatus").innerHTML = recording
     ? `<b>正在记录：${escapeHtml(status.current.title)}</b><small>开始于 ${new Date(status.current.startedAt).toLocaleTimeString("zh-CN")}</small>`
-    : status.teamsInstalled && status.teamsAudioInstalled
-      ? `<b>Teams 已就绪</b><small>${status.meetingWindowDetected || status.teamsAudioRunning ? "检测到会议活动" : "正在等待 Teams 会议"}</small>`
-      : `<b>Teams 采集尚未就绪</b><small>${escapeHtml(status.lastError || (!status.teamsInstalled ? "Microsoft Teams 当前未运行" : "未找到 Microsoft Teams Audio 设备"))}</small>`;
+    : status.teamsInstalled && status.systemAudioCaptureAvailable
+      ? `<b>Teams 已就绪</b><small>${status.callActivityDetected ? "检测到 Teams 通话音频" : status.meetingWindowDetected ? "检测到入会窗口" : "正在等待 Teams 通话"}</small>`
+      : `<b>Teams 采集尚未就绪</b><small>${escapeHtml(status.lastError || (!status.teamsInstalled ? "Microsoft Teams 当前未运行" : "系统音频采集器尚未安装"))}</small>`;
   return status;
 }
 

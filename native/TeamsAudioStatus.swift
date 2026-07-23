@@ -2,11 +2,7 @@ import Foundation
 import CoreAudio
 
 struct AudioStatus: Codable {
-    let teamsAudioInstalled: Bool
-    let teamsAudioRunning: Bool
-    let teamsAudioDevice: String?
-    let defaultInputDevice: String?
-    let builtInInputDevice: String?
+    let teamsProcessAudioRunning: Bool
 }
 
 func readString(_ object: AudioObjectID, selector: AudioObjectPropertySelector, scope: AudioObjectPropertyScope = kAudioObjectPropertyScopeGlobal) -> String? {
@@ -19,38 +15,31 @@ func readString(_ object: AudioObjectID, selector: AudioObjectPropertySelector, 
     return result == noErr ? value as String? : nil
 }
 
-func defaultInputName() -> String? {
-    var address = AudioObjectPropertyAddress(mSelector: kAudioHardwarePropertyDefaultInputDevice, mScope: kAudioObjectPropertyScopeGlobal, mElement: kAudioObjectPropertyElementMain)
-    var device = AudioObjectID(0)
-    var size = UInt32(MemoryLayout<AudioObjectID>.size)
-    guard AudioObjectGetPropertyData(AudioObjectID(kAudioObjectSystemObject), &address, 0, nil, &size, &device) == noErr else { return nil }
-    return readString(device, selector: kAudioObjectPropertyName)
+func readUInt32(_ object: AudioObjectID, selector: AudioObjectPropertySelector) -> UInt32 {
+    var address = AudioObjectPropertyAddress(mSelector: selector, mScope: kAudioObjectPropertyScopeGlobal, mElement: kAudioObjectPropertyElementMain)
+    var value: UInt32 = 0
+    var size = UInt32(MemoryLayout<UInt32>.size)
+    return AudioObjectGetPropertyData(object, &address, 0, nil, &size, &value) == noErr ? value : 0
 }
 
-var devicesAddress = AudioObjectPropertyAddress(mSelector: kAudioHardwarePropertyDevices, mScope: kAudioObjectPropertyScopeGlobal, mElement: kAudioObjectPropertyElementMain)
-var devicesSize: UInt32 = 0
-guard AudioObjectGetPropertyDataSize(AudioObjectID(kAudioObjectSystemObject), &devicesAddress, 0, nil, &devicesSize) == noErr else { exit(2) }
-var devices = [AudioObjectID](repeating: 0, count: Int(devicesSize) / MemoryLayout<AudioObjectID>.size)
-guard AudioObjectGetPropertyData(AudioObjectID(kAudioObjectSystemObject), &devicesAddress, 0, nil, &devicesSize, &devices) == noErr else { exit(2) }
-
-var teamsName: String? = nil
-var teamsRunning = false
-var builtInInputName: String? = nil
-for device in devices {
-    guard let name = readString(device, selector: kAudioObjectPropertyName) else { continue }
-    if (name.localizedCaseInsensitiveContains("MacBook") &&
-        (name.localizedCaseInsensitiveContains("microphone") || name.localizedCaseInsensitiveContains("麦克风"))) {
-        builtInInputName = name
+var teamsProcessAudioRunning = false
+var processAddress = AudioObjectPropertyAddress(mSelector: kAudioHardwarePropertyProcessObjectList, mScope: kAudioObjectPropertyScopeGlobal, mElement: kAudioObjectPropertyElementMain)
+var processSize: UInt32 = 0
+if AudioObjectGetPropertyDataSize(AudioObjectID(kAudioObjectSystemObject), &processAddress, 0, nil, &processSize) == noErr {
+    var processes = [AudioObjectID](repeating: 0, count: Int(processSize) / MemoryLayout<AudioObjectID>.size)
+    if AudioObjectGetPropertyData(AudioObjectID(kAudioObjectSystemObject), &processAddress, 0, nil, &processSize, &processes) == noErr {
+        for process in processes {
+            guard let bundleID = readString(process, selector: kAudioProcessPropertyBundleID),
+                  bundleID.localizedCaseInsensitiveContains("microsoft.teams") else { continue }
+            if readUInt32(process, selector: kAudioProcessPropertyIsRunningInput) != 0 ||
+                readUInt32(process, selector: kAudioProcessPropertyIsRunningOutput) != 0 {
+                teamsProcessAudioRunning = true
+            }
+        }
     }
-    guard name.localizedCaseInsensitiveContains("Microsoft Teams Audio") else { continue }
-    teamsName = name
-    var runAddress = AudioObjectPropertyAddress(mSelector: kAudioDevicePropertyDeviceIsRunningSomewhere, mScope: kAudioObjectPropertyScopeGlobal, mElement: kAudioObjectPropertyElementMain)
-    var running: UInt32 = 0
-    var runSize = UInt32(MemoryLayout<UInt32>.size)
-    if AudioObjectGetPropertyData(device, &runAddress, 0, nil, &runSize, &running) == noErr { teamsRunning = running != 0 }
 }
 
-let output = AudioStatus(teamsAudioInstalled: teamsName != nil, teamsAudioRunning: teamsRunning, teamsAudioDevice: teamsName, defaultInputDevice: defaultInputName(), builtInInputDevice: builtInInputName)
+let output = AudioStatus(teamsProcessAudioRunning: teamsProcessAudioRunning)
 let encoder = JSONEncoder()
 encoder.outputFormatting = [.sortedKeys]
 FileHandle.standardOutput.write(try encoder.encode(output))
