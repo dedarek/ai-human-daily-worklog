@@ -5,7 +5,7 @@
 // 自动开始只能以真实会议窗口为准。音频设备可能正被本采集器自身占用，
 // CallMonitor 一类进程也可能在 Teams 空闲时短暂出现，二者仅用于状态展示。
 
-export const MEETING_HINT = /会议|通话|呼叫|正在开会|视频通话|语音通话|huddle|\bmeeting\b|\bcalling\b|\bin a call\b|\bcall with\b/i;
+export const MEETING_HINT = /会议|例会|周会|晨会|同步会|评审会|汇报会|分享会|讨论会|复盘会|通话|呼叫|正在开会|视频通话|语音通话|huddle|\bmeeting\b|\bcalling\b|\bin a call\b|\bcall with\b/i;
 
 export const NON_MEETING = /记录|历史|history|聊天|\bchat\b|日历|calendar|活动|\bactivity\b|通知|notification|设置|\bsettings\b/i;
 

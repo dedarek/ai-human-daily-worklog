@@ -9,6 +9,8 @@ test("识别中文“……中的会议”标题（旧规则漏配的用例）",
 
 test("识别常见会议/通话标题", () => {
   assert.equal(isMeetingTitle("每周同步会议"), true);
+  assert.equal(isMeetingTitle("研发周例会 | Microsoft Teams"), true);
+  assert.equal(isMeetingTitle("安全方案评审会"), true);
   assert.equal(isMeetingTitle("与张三的通话"), true);
   assert.equal(isMeetingTitle("Weekly Sync Meeting"), true);
   assert.equal(isMeetingTitle("Huddle"), true);

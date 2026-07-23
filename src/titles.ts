@@ -16,5 +16,5 @@ export function monthlyTitle(month: string) {
 
 export function meetingTitle(date: string, time: string, subject?: string) {
   const topic = (subject ?? "").trim();
-  return `【会议纪要】${date} ${time}${topic ? ` ${topic}` : ""}`;
+  return `【会议记录】${date} ${time}${topic ? ` ${topic}` : ""}`;
 }

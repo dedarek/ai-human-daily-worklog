@@ -16,10 +16,10 @@ test("monthlyTitle 取前 7 位", () => {
 });
 
 test("meetingTitle 带主题", () => {
-  assert.equal(meetingTitle("2026-07-21", "15:30", "AI安全"), "【会议纪要】2026-07-21 15:30 AI安全");
+  assert.equal(meetingTitle("2026-07-21", "15:30", "AI安全"), "【会议记录】2026-07-21 15:30 AI安全");
 });
 
 test("meetingTitle 无主题", () => {
-  assert.equal(meetingTitle("2026-07-21", "15:30"), "【会议纪要】2026-07-21 15:30");
-  assert.equal(meetingTitle("2026-07-21", "15:30", "  "), "【会议纪要】2026-07-21 15:30");
+  assert.equal(meetingTitle("2026-07-21", "15:30"), "【会议记录】2026-07-21 15:30");
+  assert.equal(meetingTitle("2026-07-21", "15:30", "  "), "【会议记录】2026-07-21 15:30");
 });

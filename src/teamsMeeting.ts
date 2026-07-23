@@ -268,7 +268,10 @@ async function poll() {
       startSignals = meetingSignal && Date.now() >= automaticCooldownUntil ? startSignals + 1 : 0;
       if (startSignals >= 2) {
         startSignals = 0;
-        const detectedTitle = titles.find(isMeetingTitle)?.replace(/\s*\|\s*Microsoft Teams\s*$/i, "").replace(/\s*中的会议\s*$/u, "");
+        const detectedTitle = titles.find(isMeetingTitle)
+          ?.replace(/\s*\|\s*Microsoft Teams\s*$/i, "")
+          .replace(/^Meeting join\s*\|\s*/i, "")
+          .replace(/\s*中的会议\s*$/u, "");
         await startTeamsMeeting("automatic", detectedTitle);
         meetingWindowSeen = true;
       }
@@ -277,7 +280,9 @@ async function poll() {
     if (meetingWindowDetected) { meetingWindowSeen = true; missingMeetingWindows = 0; }
     else if (meetingWindowSeen) missingMeetingWindows += 1;
     const recordingSeconds = (Date.now() - Date.parse(current.startedAt)) / 1000;
-    if (!running || (meetingWindowSeen && missingMeetingWindows >= 4) || recordingSeconds >= 6 * 60 * 60) await stopTeamsMeeting();
+    // Teams 在入会、紧凑视图和主会议窗口之间切换时会短暂隐藏或改名窗口。
+    // 连续一分钟都找不到会议窗口才停止，避免刚入会便被误判结束。
+    if (!running || (meetingWindowSeen && missingMeetingWindows >= 12) || recordingSeconds >= 6 * 60 * 60) await stopTeamsMeeting();
   } catch (error) { lastStatus = { ...lastStatus, current, lastError: String(error) }; }
   finally { polling = false; }
 }
