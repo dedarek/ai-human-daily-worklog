@@ -41,7 +41,6 @@ let monitorTimer: NodeJS.Timeout | undefined;
 let startSignals = 0;
 let missingMeetingWindows = 0;
 let meetingWindowSeen = false;
-let automaticCooldownUntil = 0;
 let lastStatus: RuntimeStatus = {
   monitoring: false,
   teamsInstalled: false,
@@ -245,7 +244,6 @@ export async function stopTeamsMeeting() {
   const forceKill = setTimeout(() => recorder?.kill("SIGKILL"), 8000);
   try { await recorderClosed; } finally { audioCapture = null; recorder = null; recorderClosed = null; current = null; }
   clearTimeout(terminate); clearTimeout(forceKill);
-  automaticCooldownUntil = Date.now() + 2 * 60 * 1000;
   void transcribeAndPublish(record);
   return record;
 }
@@ -269,7 +267,7 @@ async function poll() {
     };
     if (!settings.teamsMeetingEnabled || !settings.teamsAutoRecord) { startSignals = 0; return; }
     if (!current) {
-      startSignals = meetingSignal && Date.now() >= automaticCooldownUntil ? startSignals + 1 : 0;
+      startSignals = meetingSignal ? startSignals + 1 : 0;
       if (startSignals >= 2) {
         startSignals = 0;
         await startTeamsMeeting("automatic", meetingSubject(titles));
