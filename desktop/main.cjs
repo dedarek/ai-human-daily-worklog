@@ -94,16 +94,20 @@ async function enableLinuxAutostart() {
 async function createDesktop() {
   const iconPath = path.join(app.getAppPath(), "desktop", "icon.png");
   const icon = existsSync(iconPath) ? nativeImage.createFromPath(iconPath) : nativeImage.createEmpty();
-  tray = new Tray(icon.resize({ width: 20, height: 20 }));
+  const trayPath = path.join(app.getAppPath(), "desktop", "tray.svg");
+  const trayIcon = existsSync(trayPath) ? nativeImage.createFromPath(trayPath) : icon;
+  if (process.platform === "darwin") trayIcon.setTemplateImage(true);
+  tray = new Tray(trayIcon.resize({ width: 20, height: 20 }));
   tray.on("click", () => showPage("/"));
   window = new BrowserWindow({
-    width: 1120,
-    height: 780,
+    width: 1240,
+    height: 840,
     minWidth: 860,
     minHeight: 620,
     show: false,
     title: "Worklog",
     icon,
+    backgroundColor: "#f3efe6",
     webPreferences: { contextIsolation: true, nodeIntegration: false, sandbox: true },
   });
   window.on("close", event => { if (!quitting) { event.preventDefault(); window.hide(); } });

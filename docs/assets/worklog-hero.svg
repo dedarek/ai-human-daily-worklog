@@ -1,103 +1,68 @@
 <svg width="1200" height="560" viewBox="0 0 1200 560" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <defs>
-    <linearGradient id="bg" x1="80" y1="20" x2="1110" y2="560" gradientUnits="userSpaceOnUse">
-      <stop stop-color="#0B1020"/>
-      <stop offset="0.55" stop-color="#111936"/>
-      <stop offset="1" stop-color="#17264A"/>
-    </linearGradient>
-    <linearGradient id="brand" x1="150" y1="120" x2="450" y2="350" gradientUnits="userSpaceOnUse">
-      <stop stop-color="#8B9CFF"/>
-      <stop offset="1" stop-color="#55E6C1"/>
-    </linearGradient>
-    <linearGradient id="report" x1="760" y1="116" x2="1050" y2="452" gradientUnits="userSpaceOnUse">
-      <stop stop-color="#1D2A52"/>
-      <stop offset="1" stop-color="#11182F"/>
-    </linearGradient>
-    <filter id="shadow" x="-40%" y="-40%" width="180%" height="180%">
-      <feDropShadow dx="0" dy="18" stdDeviation="24" flood-color="#020617" flood-opacity="0.5"/>
-    </filter>
-    <filter id="glow" x="-100%" y="-100%" width="300%" height="300%">
-      <feGaussianBlur stdDeviation="42"/>
-    </filter>
-  </defs>
+  <rect width="1200" height="560" rx="20" fill="#F1ECE2"/>
+  <path d="M0 0H506V560H0V0Z" fill="#20231F"/>
+  <path d="M472 0H506V560H472V0Z" fill="#2E332C"/>
+  <path d="M488 0V560" stroke="#454B42"/>
 
-  <rect width="1200" height="560" rx="28" fill="url(#bg)"/>
-  <circle cx="214" cy="125" r="120" fill="#5865F2" fill-opacity="0.14" filter="url(#glow)"/>
-  <circle cx="1050" cy="472" r="145" fill="#39D7B0" fill-opacity="0.1" filter="url(#glow)"/>
-  <path d="M0 440C215 370 341 520 564 450C796 377 944 282 1200 364V560H0V440Z" fill="#FFFFFF" fill-opacity="0.025"/>
-
-  <g transform="translate(74 76)">
-    <rect width="54" height="54" rx="16" fill="url(#brand)"/>
-    <path d="M14 17L22.5 39L28 25L33.5 39L42 17" stroke="#07101D" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
-    <text x="72" y="42" fill="#F8FAFC" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" font-size="40" font-weight="720">Worklog</text>
+  <g transform="translate(62 54)">
+    <rect x="0" y="0" width="38" height="44" fill="#EEE8DC"/>
+    <rect x="0" y="0" width="11" height="44" fill="#D6CEC0"/>
+    <path d="M11 0V44M18 14H31M18 22H29M18 30H26" stroke="#20231F" stroke-width="2"/>
+    <circle cx="11" cy="14" r="2.5" fill="#C64F37"/>
+    <circle cx="11" cy="30" r="2.5" fill="#C64F37"/>
+    <text x="54" y="31" fill="#F5F0E6" font-family="Iowan Old Style, Georgia, serif" font-size="29" font-weight="600">Worklog</text>
   </g>
 
-  <text x="74" y="181" fill="#F8FAFC" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" font-size="47" font-weight="720">Your workday,</text>
-  <text x="74" y="233" fill="#F8FAFC" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" font-size="47" font-weight="720">remembered.</text>
-  <text x="76" y="271" fill="#AAB6D3" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" font-size="18">Agent traces, commands and meetings — one clear work archive.</text>
+  <text x="62" y="171" fill="#D56C55" font-family="SFMono-Regular, Menlo, monospace" font-size="11" font-weight="700" letter-spacing="2">LOCAL-FIRST WORK ARCHIVE</text>
+  <text x="62" y="224" fill="#F6F0E5" font-family="Iowan Old Style, Georgia, serif" font-size="47" font-weight="600">Your agents worked.</text>
+  <text x="62" y="276" fill="#F6F0E5" font-family="Iowan Old Style, Georgia, serif" font-size="47" font-weight="600">Now remember why.</text>
+  <text x="64" y="317" fill="#ABB1A8" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" font-size="16">把分散的 Agent、终端、应用与会议证据，</text>
+  <text x="64" y="344" fill="#ABB1A8" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" font-size="16">整理成一份真正属于你的工作档案。</text>
 
-  <g font-family="-apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" font-size="16" font-weight="600">
-    <g transform="translate(76 308)">
-      <rect width="146" height="46" rx="14" fill="#FFFFFF" fill-opacity="0.07" stroke="#FFFFFF" stroke-opacity="0.12"/>
-      <circle cx="25" cy="23" r="6" fill="#D29B79"/>
-      <text x="42" y="29" fill="#DDE5F5">Claude Code</text>
+  <g font-family="SFMono-Regular, Menlo, monospace" font-size="10" letter-spacing="1">
+    <rect x="62" y="392" width="116" height="31" fill="#2C312A" stroke="#4A5047"/><circle cx="78" cy="408" r="3" fill="#D56C55"/><text x="89" y="412" fill="#C4CAC0">AGENT LOGS</text>
+    <rect x="188" y="392" width="112" height="31" fill="#2C312A" stroke="#4A5047"/><circle cx="204" cy="408" r="3" fill="#8EA27F"/><text x="215" y="412" fill="#C4CAC0">TERMINAL</text>
+    <rect x="310" y="392" width="120" height="31" fill="#2C312A" stroke="#4A5047"/><circle cx="326" cy="408" r="3" fill="#B98848"/><text x="337" y="412" fill="#C4CAC0">MEETINGS</text>
+  </g>
+  <text x="62" y="493" fill="#737A71" font-family="SFMono-Regular, Menlo, monospace" font-size="10" letter-spacing="1.4">PRIVATE BY DEFAULT · AUTOMATED EVERY DAY</text>
+
+  <g transform="translate(556 42)">
+    <rect x="0" y="0" width="582" height="476" fill="#FBF9F3" stroke="#CFC6B8"/>
+    <rect x="0" y="0" width="582" height="49" fill="#E4DDD1"/>
+    <circle cx="24" cy="25" r="4" fill="#C64F37"/><circle cx="39" cy="25" r="4" fill="#B98B4C"/><circle cx="54" cy="25" r="4" fill="#738868"/>
+    <text x="80" y="30" fill="#6D716A" font-family="SFMono-Regular, Menlo, monospace" font-size="10">WORKLOG / TODAY'S FIELD NOTES</text>
+
+    <rect x="0" y="49" width="126" height="427" fill="#242721"/>
+    <rect x="17" y="73" width="25" height="29" fill="#EEE8DC"/><rect x="17" y="73" width="7" height="29" fill="#D0C7B9"/><path d="M24 73V102M29 84H37M29 90H36" stroke="#242721" stroke-width="1.5"/><circle cx="24" cy="84" r="2" fill="#C64F37"/>
+    <text x="50" y="92" fill="#F3EDE2" font-family="Georgia, serif" font-size="15" font-weight="600">Worklog</text>
+    <g font-family="-apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" font-size="9">
+      <rect x="12" y="132" width="102" height="30" fill="#30342D"/><rect x="12" y="132" width="2" height="30" fill="#C64F37"/><text x="26" y="151" fill="#F6F0E6">今日现场</text>
+      <text x="26" y="190" fill="#92998F">日报校正</text><text x="26" y="224" fill="#92998F">工作档案</text><text x="26" y="258" fill="#92998F">采集来源</text><text x="26" y="292" fill="#92998F">系统设置</text>
     </g>
-    <g transform="translate(236 308)">
-      <rect width="112" height="46" rx="14" fill="#FFFFFF" fill-opacity="0.07" stroke="#FFFFFF" stroke-opacity="0.12"/>
-      <circle cx="25" cy="23" r="6" fill="#77E2C1"/>
-      <text x="42" y="29" fill="#DDE5F5">Codex</text>
-    </g>
-    <g transform="translate(362 308)">
-      <rect width="126" height="46" rx="14" fill="#FFFFFF" fill-opacity="0.07" stroke="#FFFFFF" stroke-opacity="0.12"/>
-      <circle cx="25" cy="23" r="6" fill="#9BA8FF"/>
-      <text x="42" y="29" fill="#DDE5F5">Terminal</text>
-    </g>
-    <g transform="translate(76 368)">
-      <rect width="136" height="46" rx="14" fill="#FFFFFF" fill-opacity="0.07" stroke="#FFFFFF" stroke-opacity="0.12"/>
-      <circle cx="25" cy="23" r="6" fill="#F0A865"/>
-      <text x="42" y="29" fill="#DDE5F5">OpenCode</text>
-    </g>
-    <g transform="translate(226 368)">
-      <rect width="112" height="46" rx="14" fill="#FFFFFF" fill-opacity="0.07" stroke="#FFFFFF" stroke-opacity="0.12"/>
-      <circle cx="25" cy="23" r="6" fill="#8E90F4"/>
-      <text x="42" y="29" fill="#DDE5F5">Teams</text>
-    </g>
-    <g transform="translate(352 368)">
-      <rect width="154" height="46" rx="14" fill="#FFFFFF" fill-opacity="0.07" stroke="#FFFFFF" stroke-opacity="0.12"/>
-      <circle cx="25" cy="23" r="6" fill="#F8D66D"/>
-      <text x="42" y="29" fill="#DDE5F5">Applications</text>
+    <circle cx="24" cy="432" r="4" fill="#829876"/><text x="37" y="435" fill="#A8AFA5" font-family="-apple-system, sans-serif" font-size="8">后台正在运行</text>
+
+    <g transform="translate(150 76)">
+      <text x="0" y="12" fill="#A14230" font-family="SFMono-Regular, Menlo, monospace" font-size="7" letter-spacing="1">TODAY'S FIELD NOTES · JUL 30</text>
+      <text x="0" y="50" fill="#20231F" font-family="Iowan Old Style, Georgia, serif" font-size="29" font-weight="600">今天的工作现场</text>
+      <text x="0" y="72" fill="#747970" font-family="-apple-system, sans-serif" font-size="9">从分散证据里看见项目如何向前推进。</text>
+      <line x1="0" y1="91" x2="400" y2="91" stroke="#D8D1C4"/>
+      <g transform="translate(0 109)">
+        <rect width="400" height="67" fill="#F5F1E9" stroke="#D8D1C4"/>
+        <line x1="100" y1="0" x2="100" y2="67" stroke="#D8D1C4"/><line x1="200" y1="0" x2="200" y2="67" stroke="#D8D1C4"/><line x1="300" y1="0" x2="300" y2="67" stroke="#D8D1C4"/>
+        <g font-family="-apple-system, sans-serif" font-size="7" fill="#777B72"><text x="12" y="17">有效证据</text><text x="112" y="17">活跃项目</text><text x="212" y="17">可确认产物</text><text x="312" y="17">日报状态</text></g>
+        <g font-family="Georgia, serif" font-size="20" font-weight="600" fill="#20231F"><text x="12" y="44">128</text><text x="112" y="44">4</text><text x="212" y="44">11</text><text x="312" y="44">草稿 v2</text></g>
+      </g>
+      <g transform="translate(0 194)">
+        <rect width="400" height="164" fill="#FFFDF8" stroke="#D8D1C4"/>
+        <rect x="18" y="18" width="25" height="25" fill="#F1ECE2" stroke="#BCB3A4"/><text x="27" y="35" fill="#A14230" font-family="Menlo, monospace" font-size="8" font-weight="700">B</text>
+        <text x="57" y="27" fill="#A14230" font-family="Menlo, monospace" font-size="6" letter-spacing="1">TODAY · WORK GRAPH</text>
+        <text x="57" y="48" fill="#20231F" font-family="Georgia, serif" font-size="17" font-weight="600">项目与产出链</text>
+        <line x1="18" y1="69" x2="382" y2="69" stroke="#D8D1C4"/>
+        <text x="18" y="92" fill="#20231F" font-family="Georgia, serif" font-size="13" font-weight="600">Worklog 发布体验</text>
+        <rect x="18" y="104" width="174" height="42" fill="#F8F5EE" stroke="#D8D1C4"/><rect x="18" y="104" width="3" height="42" fill="#C64F37"/><text x="29" y="121" fill="#3D413B" font-family="-apple-system, sans-serif" font-size="7">重构首次启动与应用视觉</text><text x="29" y="136" fill="#747970" font-family="Menlo, monospace" font-size="6">意图 → 8 个节点 → 构建</text>
+        <rect x="208" y="104" width="174" height="42" fill="#F8F5EE" stroke="#D8D1C4"/><rect x="208" y="104" width="3" height="42" fill="#809574"/><text x="219" y="121" fill="#3D413B" font-family="-apple-system, sans-serif" font-size="7">验证桌面端跨平台打包</text><text x="219" y="136" fill="#747970" font-family="Menlo, monospace" font-size="6">意图 → 5 个节点 → 发布</text>
+      </g>
+      <text x="0" y="390" fill="#90938A" font-family="Menlo, monospace" font-size="7" letter-spacing="1">EVIDENCE → WORK → REPORT → ARCHIVE</text>
     </g>
   </g>
-
-  <path d="M506 360C580 360 598 296 665 296" stroke="url(#brand)" stroke-width="3" stroke-linecap="round" stroke-dasharray="5 9"/>
-  <circle cx="660" cy="296" r="6" fill="#71DFC4"/>
-
-  <g transform="translate(670 88)" filter="url(#shadow)">
-    <rect width="446" height="384" rx="22" fill="url(#report)" stroke="#A9B6FF" stroke-opacity="0.18"/>
-    <rect x="1" y="1" width="444" height="58" rx="21" fill="#FFFFFF" fill-opacity="0.035"/>
-    <circle cx="28" cy="30" r="5" fill="#FF6B7A"/>
-    <circle cx="46" cy="30" r="5" fill="#F4C95D"/>
-    <circle cx="64" cy="30" r="5" fill="#55D6A9"/>
-    <text x="92" y="36" fill="#8996B4" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" font-size="14">Feishu · Work Archive</text>
-
-    <text x="30" y="102" fill="#F7F9FF" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" font-size="24" font-weight="700">今日工作日志</text>
-    <rect x="30" y="124" width="386" height="62" rx="12" fill="#6F7FF5" fill-opacity="0.13" stroke="#7E8DF8" stroke-opacity="0.18"/>
-    <rect x="47" y="144" width="236" height="7" rx="3.5" fill="#B9C3E1"/>
-    <rect x="47" y="160" width="320" height="6" rx="3" fill="#72809F"/>
-
-    <text x="30" y="224" fill="#F7F9FF" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" font-size="17" font-weight="650">项目进展与产出</text>
-    <circle cx="38" cy="254" r="4" fill="#70DFC2"/>
-    <rect x="52" y="250" width="298" height="7" rx="3.5" fill="#AAB5D2"/>
-    <rect x="52" y="266" width="337" height="6" rx="3" fill="#5F6C8A"/>
-    <circle cx="38" cy="296" r="4" fill="#70DFC2"/>
-    <rect x="52" y="292" width="262" height="7" rx="3.5" fill="#AAB5D2"/>
-    <rect x="52" y="308" width="310" height="6" rx="3" fill="#5F6C8A"/>
-
-    <text x="30" y="354" fill="#F7F9FF" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" font-size="17" font-weight="650">当前状态</text>
-    <rect x="30" y="372" width="119" height="30" rx="9" fill="#36C99B" fill-opacity="0.14"/>
-    <circle cx="47" cy="387" r="4" fill="#55DBB3"/>
-    <text x="58" y="392" fill="#A9EBD8" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" font-size="13" font-weight="600">3 项已完成</text>
-  </g>
-
-  <text x="76" y="492" fill="#7583A3" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" font-size="14" letter-spacing="1.4">LOCAL-FIRST · PRIVATE · AUTOMATED</text>
 </svg>

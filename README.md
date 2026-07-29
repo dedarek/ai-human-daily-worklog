@@ -2,26 +2,24 @@
 
 <img src="docs/assets/worklog-hero.svg" alt="Worklog — Your workday, remembered" width="100%" />
 
-<br />
-
-## AI 时代，自动生成属于你自己的工作档案
+## 每个 App 都有 log。你的一天也应该有。
 
 Worklog 在你的电脑上汇合 Agent、终端、应用与会议留下的工作证据，<br />
 过滤无关噪声，生成日报、周报和月报，自动归档到飞书或本地 Markdown。
 
 <p>
-  <img alt="macOS 13+" src="https://img.shields.io/badge/macOS_13+-111827?style=flat-square&logo=apple&logoColor=white" />
-  <img alt="Windows 10+" src="https://img.shields.io/badge/Windows_10+-0078D4?style=flat-square&logo=windows&logoColor=white" />
-  <img alt="Linux" src="https://img.shields.io/badge/Linux_desktop-FCC624?style=flat-square&logo=linux&logoColor=111827" />
-  <img alt="Local first" src="https://img.shields.io/badge/local--first-5B67F1?style=flat-square" />
-  <img alt="Teams" src="https://img.shields.io/badge/Teams_system_audio-6264A7?style=flat-square&logo=microsoftteams&logoColor=white" />
-  <img alt="Feishu CLI" src="https://img.shields.io/badge/Feishu_CLI-3370FF?style=flat-square" />
-  <img alt="Apache 2.0" src="https://img.shields.io/badge/license-Apache--2.0-5B67F1?style=flat-square" />
+  <img alt="macOS 13+" src="https://img.shields.io/badge/macOS_13+-20231F?style=flat-square&logo=apple&logoColor=white" />
+  <img alt="Windows 10+" src="https://img.shields.io/badge/Windows_10+-20231F?style=flat-square&logo=windows&logoColor=white" />
+  <img alt="Linux" src="https://img.shields.io/badge/Linux_desktop-20231F?style=flat-square&logo=linux&logoColor=white" />
+  <img alt="Local first" src="https://img.shields.io/badge/local--first-526644?style=flat-square" />
+  <img alt="Teams" src="https://img.shields.io/badge/Teams_system_audio-526644?style=flat-square&logo=microsoftteams&logoColor=white" />
+  <img alt="Feishu CLI" src="https://img.shields.io/badge/Feishu_CLI-C64F37?style=flat-square" />
+  <img alt="Apache 2.0" src="https://img.shields.io/badge/license-Apache--2.0-8D6A34?style=flat-square" />
   <img alt="CI" src="https://img.shields.io/github/actions/workflow/status/dedarek/ai-human-daily-worklog/ci.yml?branch=main&amp;style=flat-square&amp;label=build" />
   <img alt="GitHub stars" src="https://img.shields.io/github/stars/dedarek/ai-human-daily-worklog?style=flat-square" />
 </p>
 
-[产品预览](#产品预览) · [核心能力](#核心能力) · [兼容性](#平台能力) · [快速开始](#快速开始) · [产品原则](docs/VISION.md) · [Roadmap](#roadmap)
+[为什么需要它](#为什么需要它) · [产品预览](#产品预览) · [核心能力](#核心能力) · [平台能力](#平台能力) · [快速开始](#快速开始) · [Roadmap](#roadmap)
 
 </div>
 
@@ -46,27 +44,27 @@ Worklog 为此而生。它从电脑上已经存在的操作与 Agent 执行记�
 
 那些与工作无关的事情，不应该进入你的工作档案。
 
-## 一天，只留一份清楚的记录
+## 从工作证据，到长期档案
 
 <table>
 <tr>
 <td width="33%" valign="top">
 
-### 01 · 自动采集
+### 01 / 自动采集
 
 持续观察有效工作操作，读取受支持的 Agent 执行日志；macOS 还可在 Teams 通话时采集系统声音。无需在每个任务结束后手动登记。
 
 </td>
 <td width="33%" valign="top">
 
-### 02 · 理解工作
+### 02 / 理解工作
 
 将分散的证据按项目与上下文重组。过滤设备事件、重复操作、静音、识别噪声和与工作无关的内容。
 
 </td>
 <td width="33%" valign="top">
 
-### 03 · 自动归档
+### 03 / 自动归档
 
 生成自然、可复盘的日报，并进一步汇总为周报与月报，按「月份 → 周 → 日」写入飞书知识库。
 
@@ -76,9 +74,9 @@ Worklog 为此而生。它从电脑上已经存在的操作与 Agent 执行记�
 
 ## 产品预览
 
-<img src="docs/assets/worklog-dashboard.svg" alt="Worklog 本地管理页面：运行状态、隐私控制、采集审计和最近生成结果" width="100%" />
+<img src="docs/assets/worklog-dashboard.svg" alt="Worklog 工作档案台：今日概览、项目与产出链、采集和发布状态" width="100%" />
 
-<p align="center"><sub>基于真实界面绘制的脱敏预览；不包含用户身份、工作内容、路径或模型凭据。</sub></p>
+<p align="center"><sub>工作证据 → 项目与产出 → 日报校正 → 长期归档。预览内容已脱敏。</sub></p>
 
 ## 它记录什么
 

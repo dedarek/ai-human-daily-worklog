@@ -1,111 +1,216 @@
 <!doctype html>
 <html lang="zh-CN">
 <head>
-  <meta charset="UTF-8"/>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Worklog</title>
-  <link rel="stylesheet" href="/style.css"/>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="theme-color" content="#20231f" />
+  <title>Worklog · 工作档案</title>
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+  <link rel="stylesheet" href="/style.css" />
 </head>
 <body>
-<main>
-  <header>
-    <p class="eyebrow">LOCAL · PRIVATE · AUTOMATED</p>
-    <h1>Worklog</h1>
-    <p>把一天真实做过的事，自动整理成可追溯的工作档案。操作、Agent 产出和 Teams 会议在本地汇合，再写入飞书。</p>
-  </header>
-  <section class="status"><span id="dot"></span><div><b id="state">正在读取状态…</b><small id="meta"></small></div></section>
+  <div class="app-shell">
+    <aside class="sidebar">
+      <a class="brand" href="#today" aria-label="Worklog 首页">
+        <svg class="brand-mark" viewBox="0 0 48 48" aria-hidden="true">
+          <rect x="7" y="5" width="34" height="38" rx="3" />
+          <path d="M16 5v38M22 16h12M22 23h10M22 30h7" />
+          <circle cx="16" cy="16" r="2.5" />
+          <circle cx="16" cy="30" r="2.5" />
+        </svg>
+        <span><strong>Worklog</strong><small>个人工作档案</small></span>
+      </a>
 
-  <form id="settings">
-    <section>
-      <h2>自动生成计划</h2>
-      <label>工作日日报时间<input name="schedule" placeholder="0 18 * * 1-5"/></label>
-      <label>晨间续接时间<input name="morningSchedule" placeholder="30 8 * * 1-5"/></label>
-      <label>周报时间<input name="weeklySchedule" placeholder="0 8 * * 1"/></label>
-      <label>月报时间<input name="monthlySchedule" placeholder="10 8 1 * *"/></label>
-      <p class="hint">均为 5 段 cron，按下方时区计算。默认：工作日 08:30 恢复上下文、18:00 生成日报；周一 08:00 写上周周报；每月 1 日 08:10 写上月月报。</p>
-      <label>时区<input name="timezone"/></label>
-      <label>忽略的应用（每行一个）<textarea name="ignoredProcesses" rows="7"></textarea></label>
-      <p class="hint">每分钟记录一次前台应用与窗口标题，只把工作时间内的有效操作纳入报告。</p>
-    </section>
-    <section>
-      <h2>隐私与采集控制</h2>
-      <label class="check"><input name="redactionEnabled" type="checkbox"/>写入前自动过滤密钥和敏感信息</label>
-      <p class="hint">默认开启，覆盖 API Key、Bearer、Token、密码、私钥和自定义词。</p>
-      <label>额外敏感词（每行一个）<textarea name="redactionTerms" rows="4" placeholder="客户名&#10;内部项目代号"></textarea></label>
-      <label class="check"><input name="capturePaused" type="checkbox"/>暂停所有工作采集</label>
-      <p class="hint">暂停后不记录前台操作、终端和自动 Teams 会议；已有会议不会被强行中断。</p>
-    </section>
-    <section>
-      <h2>LLM</h2>
-      <label>接口协议<select name="llmProtocol"><option value="anthropic">Anthropic 兼容</option><option value="openai">OpenAI 兼容</option></select></label>
-      <label>API 地址<input name="llmBaseUrl"/></label>
-      <label>模型<input name="llmModel"/></label>
-      <label>API Key <input name="llmApiKey" type="password" placeholder="留空则保留已保存的 Key"/></label>
-    </section>
-    <section>
-      <h2>本地 Markdown</h2>
-      <label class="check"><input name="markdownOutputEnabled" type="checkbox"/>同时保存 Markdown 档案</label>
-      <label>导出目录<input name="markdownOutputDir" placeholder="默认：Worklog/exports"/></label>
-      <p class="hint">可填写 Obsidian、Logseq 或 Git 仓库中的绝对路径。日报、周报和月报都会同步导出。</p>
-    </section>
-    <section>
-      <h2>飞书 CLI</h2>
-      <div id="larkStatus" class="setup-item">正在检查飞书 CLI…</div>
-      <p class="hint">使用你的飞书用户身份读写知识库，不再在本项目中保存机器人 App ID 或 App Secret。</p>
-      <label>知识库父页面链接<input id="wikiUrl" placeholder="https://xxx.feishu.cn/wiki/..."/></label>
-      <button id="bindWiki" type="button" class="secondary">绑定知识库位置</button>
-      <p class="hint"><a href="https://open.feishu.cn/document/no_class/mcp-archive/feishu-cli-installation-guide.md" target="_blank">飞书 CLI 安装与授权指南 ↗</a></p>
-    </section>
-    <section class="teams-config" id="teamsSection">
-      <h2>Teams 会议</h2>
-      <div id="teamsStatus" class="setup-item">正在检查 Teams…</div>
-      <label class="check"><input name="teamsMeetingEnabled" type="checkbox"/>启用 Teams 会议采集</label>
-      <label class="check"><input name="teamsAutoRecord" type="checkbox"/>检测到 Teams 通话后自动记录</label>
-      <details><summary>本地转写设置</summary><label>转写程序<input name="whisperCliPath"/></label><label>转写模型<input name="whisperModelPath"/></label></details>
-      <div class="meeting-actions"><button id="meetingStart" type="button" class="secondary">手动开始会议记录</button><button id="meetingStop" type="button" class="danger" disabled>结束并整理内容</button></div>
-      <p class="hint" id="teamsHelp">macOS 版本直接采集电脑正在播放的系统声音，不使用麦克风。有效讨论会并入当日日报，不会单独创建飞书文档。</p>
-    </section>
-    <div class="actions"><button type="submit">保存配置</button><button id="run" type="button" class="secondary">立即生成并发布</button></div>
-  </form>
+      <nav class="primary-nav" aria-label="主要导航">
+        <a class="active" href="#today"><span class="nav-index">01</span><span class="nav-text" data-short="今日">今日现场</span></a>
+        <a href="#review"><span class="nav-index">02</span><span class="nav-text" data-short="日报">日报校正</span></a>
+        <a href="#archive"><span class="nav-index">03</span><span class="nav-text" data-short="档案">工作档案</span></a>
+        <a href="#sources"><span class="nav-index">04</span><span class="nav-text" data-short="采集">采集来源</span></a>
+        <a href="#configuration"><span class="nav-index">05</span><span class="nav-text" data-short="设置">系统设置</span></a>
+      </nav>
 
-  <pre id="notice"></pre>
+      <div class="sidebar-foot">
+        <div class="live-state">
+          <span id="dot" aria-hidden="true"></span>
+          <div><b id="state">正在读取状态…</b><small id="meta"></small></div>
+        </div>
+        <button id="run" type="button" class="sidebar-action">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12m0 0 4-4m-4 4-4-4M5 18h14" /></svg>
+          生成并发布今日档案
+        </button>
+        <p class="privacy-note"><span></span>原始记录仅保存在这台电脑</p>
+      </div>
+    </aside>
 
-  <section class="workspace morning-panel">
-    <div class="history-title"><div><p class="section-kicker">08:30 · CONTINUE</p><h2>晨间续接</h2></div><button id="morningGenerate" type="button" class="text-button">生成 / 刷新</button></div>
-    <div id="morning" class="document-preview"><p class="hint">最近的未决事项与项目上下文会在这里恢复。</p></div>
-  </section>
+    <main class="main-canvas">
+      <header class="page-header" id="today">
+        <div>
+          <p class="eyebrow">TODAY'S FIELD NOTES · <span id="todayLabel">正在定位日期</span></p>
+          <h1>今天的工作现场</h1>
+          <p>先看项目如何推进，再在下班前把零散证据整理成一份可信、可继续的工作档案。</p>
+        </div>
+        <div class="date-stamp" aria-hidden="true"><b id="dateDay">--</b><span id="dateMonth">----</span><small id="dateWeekday">---</small></div>
+      </header>
 
-  <section class="workspace">
-    <div class="history-title"><div><p class="section-kicker">TODAY · WORK GRAPH</p><h2>今日项目与产出链</h2></div><button id="graphRefresh" type="button" class="text-button">刷新</button></div>
-    <p class="hint">把分散在窗口、终端与 Agent 中的工作连接成「意图 → 执行 → 产物 → 结果」，不再按工具记流水账。</p>
-    <div id="workGraph" class="project-grid"><p class="hint">正在构建今天的项目图谱…</p></div>
-  </section>
+      <div id="notice" class="notice" role="status" aria-live="polite"></div>
 
-  <section class="workspace draft-panel">
-    <div class="history-title"><div><p class="section-kicker">18:00 · REVIEW</p><h2>日报预览与校正</h2></div><span id="draftState" class="pill">尚未生成</span></div>
-    <div class="draft-actions"><button id="draftGenerate" type="button">生成预览</button><button id="draftSave" type="button" class="secondary" disabled>保存校正</button><button id="draftRegenerate" type="button" class="secondary" disabled>按补充重新生成</button><button id="draftPublish" type="button" disabled>发布到飞书</button></div>
-    <div id="gapQuestions" class="gap-list"></div>
-    <textarea id="draftEditor" class="report-editor" rows="24" placeholder="生成预览后，可在发布前直接修改日报。" disabled></textarea>
-    <div class="reclassify">
-      <div><h3>项目归类校正</h3><p class="hint">告诉 Worklog 两个项目名其实是同一个；以后会自动沿用。</p></div>
-      <label>当前名称<input id="aliasFrom" placeholder="例如 mac-worklog-feishu"/></label>
-      <label>统一归为<input id="aliasTo" placeholder="例如 Worklog"/></label>
-    </div>
-    <details id="draftDiff"><summary>比较初稿与当前版本</summary><p id="draftVersion" class="hint"></p><div class="diff-grid"><div><b>初稿</b><pre id="draftOriginal" class="original-report"></pre></div><div><b>当前版本</b><pre id="draftCurrent" class="original-report"></pre></div></div></details>
-    <div id="trace" class="trace-list"><p class="hint">生成预览后，每一段文字都会显示本地证据与可信度。</p></div>
-  </section>
+      <section class="metrics" aria-label="今日概览">
+        <article><span>有效证据</span><b id="metricEvidence">—</b><small>已过滤工作素材</small></article>
+        <article><span>活跃项目</span><b id="metricProjects">—</b><small>按上下文自动归类</small></article>
+        <article><span>可确认产物</span><b id="metricArtifacts">—</b><small>提交、文档与决策</small></article>
+        <article><span>日报状态</span><b id="metricDraft">待生成</b><small>18:00 自动整理</small></article>
+      </section>
 
-  <section class="workspace archive-panel">
-    <div><p class="section-kicker">LOCAL ARCHIVE · SEARCH</p><h2>搜索你的工作档案</h2></div>
-    <div class="search-box"><input id="archiveQuery" placeholder="例如：上次为什么决定改用飞书 CLI？"/><button id="archiveSearch" type="button" class="secondary">搜索</button><button id="archiveAsk" type="button">带证据回答</button></div>
-    <div id="archiveAnswer" class="archive-answer"></div>
-    <div id="archiveResults" class="search-results"><p class="hint">搜索全部日报、项目、产物和证据，不会把本地档案上传到第三方搜索服务。</p></div>
-  </section>
+      <section class="ledger-section morning-panel">
+        <div class="section-heading">
+          <div class="section-index">A</div>
+          <div><p class="section-kicker">08:30 · CONTINUE</p><h2>晨间续接</h2><p>从昨天停下的地方继续，不必重新翻找上下文。</p></div>
+          <button id="morningGenerate" type="button" class="quiet-button">生成 / 刷新</button>
+        </div>
+        <div id="morning" class="document-preview empty-state"><p>最近的未决事项与项目上下文会在这里恢复。</p></div>
+      </section>
 
-  <section class="history audit"><div class="history-title"><div><h2>今天采集了什么</h2><p class="hint">只读审计视图；生成报告前也可以先检查素材是否合理。</p></div><button id="auditRefresh" type="button" class="text-button">刷新</button></div><div id="auditSummary" class="audit-summary"><p class="hint">正在读取采集审计…</p></div><div id="audit" class="runs"><p class="hint">还没有可查看的采集内容。</p></div></section>
-  <section class="history"><div class="history-title"><h2>最近会议</h2><button id="meetingRefresh" type="button" class="text-button">刷新</button></div><div id="meetings" class="runs"><p class="hint">还没有会议记录。</p></div></section>
-  <section class="history"><div class="history-title"><h2>最近生成情况</h2><button id="refresh" type="button" class="text-button">刷新</button></div><div id="runs" class="runs"><p class="hint">还没有生成记录。</p></div></section>
-</main>
-<script src="/app.js"></script>
+      <section class="ledger-section graph-panel">
+        <div class="section-heading">
+          <div class="section-index">B</div>
+          <div><p class="section-kicker">TODAY · WORK GRAPH</p><h2>项目与产出链</h2><p>把分散在窗口、终端和 Agent 中的动作还原为意图、执行与结果。</p></div>
+          <button id="graphRefresh" type="button" class="quiet-button">刷新图谱</button>
+        </div>
+        <div id="workGraph" class="project-grid loading-state"><p>正在构建今天的项目图谱…</p></div>
+      </section>
+
+      <section class="ledger-section draft-panel" id="review">
+        <div class="section-heading">
+          <div class="section-index">C</div>
+          <div><p class="section-kicker">18:00 · REVIEW</p><h2>日报校正台</h2><p>发布前确认叙事、补齐证据缺口，并检查每一段的来源。</p></div>
+          <span id="draftState" class="status-stamp">尚未生成</span>
+        </div>
+        <div class="draft-toolbar" role="toolbar" aria-label="日报操作">
+          <button id="draftGenerate" type="button">生成预览</button>
+          <button id="draftSave" type="button" class="secondary" disabled>保存校正</button>
+          <button id="draftRegenerate" type="button" class="secondary" disabled>按补充重写</button>
+          <button id="draftPublish" type="button" class="publish" disabled>发布到飞书</button>
+        </div>
+        <div id="gapQuestions" class="gap-list"></div>
+        <div class="editor-shell">
+          <div class="editor-ruler" aria-hidden="true"><span>工作日志正文</span><span>Markdown</span></div>
+          <textarea id="draftEditor" class="report-editor" rows="24" placeholder="生成预览后，可在发布前直接修改日报。" disabled></textarea>
+        </div>
+        <div class="reclassify">
+          <div><p class="section-kicker">LEARN A CORRECTION</p><h3>项目归类校正</h3><p>告诉 Worklog 两个项目名属于同一件事，以后会自动沿用。</p></div>
+          <label>当前名称<input id="aliasFrom" placeholder="例如 mac-worklog-feishu" /></label>
+          <label>统一归为<input id="aliasTo" placeholder="例如 Worklog" /></label>
+        </div>
+        <details id="draftDiff" class="drawer">
+          <summary>比较初稿与当前版本 <span id="draftVersion"></span></summary>
+          <div class="diff-grid"><div><b>初稿</b><pre id="draftOriginal" class="original-report"></pre></div><div><b>当前版本</b><pre id="draftCurrent" class="original-report"></pre></div></div>
+        </details>
+        <div id="trace" class="trace-list"><div class="empty-state"><p>生成预览后，每一段文字都会显示本地证据与可信度。</p></div></div>
+      </section>
+
+      <section class="ledger-section archive-panel" id="archive">
+        <div class="section-heading">
+          <div class="section-index">D</div>
+          <div><p class="section-kicker">LOCAL ARCHIVE · SEARCH</p><h2>搜索工作档案</h2><p>跨日报、项目、产物和原始证据找回过去的决定。</p></div>
+        </div>
+        <div class="search-box">
+          <label class="search-field"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6"/><path d="m16 16 4 4"/></svg><input id="archiveQuery" aria-label="搜索工作档案" placeholder="例如：上次为什么决定改用飞书 CLI？" /></label>
+          <button id="archiveSearch" type="button" class="secondary">搜索</button>
+          <button id="archiveAsk" type="button">带证据回答</button>
+        </div>
+        <div id="archiveAnswer" class="archive-answer"></div>
+        <div id="archiveResults" class="search-results empty-state"><p>搜索仅在本地档案中进行，不会上传到第三方搜索服务。</p></div>
+      </section>
+
+      <section class="ledger-section source-panel" id="sources">
+        <div class="section-heading">
+          <div class="section-index">E</div>
+          <div><p class="section-kicker">EVIDENCE · READ ONLY</p><h2>采集来源</h2><p>在生成报告之前，先检查今天留下的素材是否合理。</p></div>
+          <button id="auditRefresh" type="button" class="quiet-button">刷新素材</button>
+        </div>
+        <div id="auditSummary" class="audit-summary loading-state"><p>正在读取采集审计…</p></div>
+        <div id="audit" class="runs evidence-list empty-state"><p>还没有可查看的采集内容。</p></div>
+      </section>
+
+      <div class="split-sections">
+        <section class="ledger-section compact-section">
+          <div class="compact-heading"><div><p class="section-kicker">MEETINGS</p><h2>最近会议</h2></div><button id="meetingRefresh" type="button" class="quiet-button">刷新</button></div>
+          <div id="meetings" class="runs empty-state"><p>还没有会议记录。</p></div>
+        </section>
+        <section class="ledger-section compact-section">
+          <div class="compact-heading"><div><p class="section-kicker">DELIVERIES</p><h2>最近生成</h2></div><button id="refresh" type="button" class="quiet-button">刷新</button></div>
+          <div id="runs" class="runs empty-state"><p>还没有生成记录。</p></div>
+        </section>
+      </div>
+
+      <section class="ledger-section settings-panel" id="configuration">
+        <div class="section-heading">
+          <div class="section-index">F</div>
+          <div><p class="section-kicker">SYSTEM · CONFIGURATION</p><h2>系统设置</h2><p>自动化、采集边界和外部连接统一在这里管理。</p></div>
+        </div>
+        <form id="settings">
+          <details class="setting-group" open>
+            <summary><span><b>自动生成计划</b><small>日报、周报、月报与晨间续接</small></span><i></i></summary>
+            <div class="setting-body schedule-grid">
+              <label>工作日日报时间<input name="schedule" placeholder="0 18 * * 1-5" /></label>
+              <label>晨间续接时间<input name="morningSchedule" placeholder="30 8 * * 1-5" /></label>
+              <label>周报时间<input name="weeklySchedule" placeholder="0 8 * * 1" /></label>
+              <label>月报时间<input name="monthlySchedule" placeholder="10 8 1 * *" /></label>
+              <label>时区<input name="timezone" /></label>
+              <label class="wide">忽略的应用（每行一个）<textarea name="ignoredProcesses" rows="6"></textarea></label>
+              <p class="field-note wide">使用 5 段 cron。默认在工作日 08:30 恢复上下文、18:00 生成日报；周一写上周周报，每月 1 日写上月月报。</p>
+            </div>
+          </details>
+
+          <details class="setting-group" open>
+            <summary><span><b>隐私与采集</b><small>决定什么可以成为工作证据</small></span><i></i></summary>
+            <div class="setting-body">
+              <label class="switch-row"><span><b>敏感信息过滤</b><small>写入前过滤 API Key、Token、密码和私钥</small></span><input name="redactionEnabled" type="checkbox" /></label>
+              <label>额外敏感词（每行一个）<textarea name="redactionTerms" rows="4" placeholder="客户名&#10;内部项目代号"></textarea></label>
+              <label class="switch-row warning"><span><b>暂停所有工作采集</b><small>已有会议不会被强行中断</small></span><input name="capturePaused" type="checkbox" /></label>
+            </div>
+          </details>
+
+          <details class="setting-group">
+            <summary><span><b>模型与本地归档</b><small>LLM 接口和 Markdown 副本</small></span><i></i></summary>
+            <div class="setting-body form-grid">
+              <label>接口协议<select name="llmProtocol"><option value="anthropic">Anthropic 兼容</option><option value="openai">OpenAI 兼容</option></select></label>
+              <label>模型<input name="llmModel" /></label>
+              <label class="wide">API 地址<input name="llmBaseUrl" /></label>
+              <label class="wide">API Key<input name="llmApiKey" type="password" placeholder="留空则保留已保存的 Key" /></label>
+              <label class="switch-row wide"><span><b>同时保存 Markdown 档案</b><small>适用于 Obsidian、Logseq 或 Git 仓库</small></span><input name="markdownOutputEnabled" type="checkbox" /></label>
+              <label class="wide">导出目录<input name="markdownOutputDir" placeholder="默认：Worklog/exports" /></label>
+            </div>
+          </details>
+
+          <details class="setting-group">
+            <summary><span><b>飞书知识库</b><small>以你的用户身份归档工作文档</small></span><i></i></summary>
+            <div class="setting-body">
+              <div id="larkStatus" class="connection-state loading-state">正在检查飞书 CLI…</div>
+              <label>知识库父页面链接<input id="wikiUrl" placeholder="https://xxx.feishu.cn/wiki/..." /></label>
+              <div class="inline-actions"><button id="bindWiki" type="button" class="secondary">绑定知识库位置</button><a href="https://open.feishu.cn/document/no_class/mcp-archive/feishu-cli-installation-guide.md" target="_blank" rel="noreferrer">查看安装与授权指南 ↗</a></div>
+            </div>
+          </details>
+
+          <details class="setting-group" id="teamsSection">
+            <summary><span><b>Teams 会议</b><small>仅采集电脑播放的系统声音</small></span><i></i></summary>
+            <div class="setting-body">
+              <div id="teamsStatus" class="connection-state loading-state">正在检查 Teams…</div>
+              <label class="switch-row"><span><b>启用 Teams 会议采集</b><small>有效讨论会并入当日日报</small></span><input name="teamsMeetingEnabled" type="checkbox" /></label>
+              <label class="switch-row"><span><b>自动识别通话</b><small>检测到真实通话音频后开始记录</small></span><input name="teamsAutoRecord" type="checkbox" /></label>
+              <details class="nested-setting"><summary>本地转写设置</summary><div class="form-grid"><label>转写程序<input name="whisperCliPath" /></label><label>转写模型<input name="whisperModelPath" /></label></div></details>
+              <div class="meeting-actions"><button id="meetingStart" type="button" class="secondary">手动开始会议记录</button><button id="meetingStop" type="button" class="danger" disabled>结束并整理内容</button></div>
+              <p class="field-note" id="teamsHelp">macOS 直接采集电脑正在播放的系统声音，不使用麦克风；有效讨论并入当日日报，不单独创建文档。</p>
+            </div>
+          </details>
+
+          <div class="save-bar"><div><b>配置只保存在本机</b><small>保存后后台服务立即使用新设置</small></div><button type="submit">保存全部设置</button></div>
+        </form>
+      </section>
+
+      <footer><span>WORKLOG / LOCAL-FIRST WORK ARCHIVE</span><span>证据留在本地，成果归档到你选择的位置。</span></footer>
+    </main>
+  </div>
+  <script src="/app.js"></script>
 </body>
 </html>
