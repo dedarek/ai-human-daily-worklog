@@ -7,6 +7,8 @@ export type Settings = {
   capturePaused: boolean;
   redactionEnabled: boolean;
   redactionTerms: string[];
+  markdownOutputEnabled: boolean;
+  markdownOutputDir: string;
   llmBaseUrl: string;
   llmProtocol: "openai" | "anthropic";
   llmModel: string;

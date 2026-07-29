@@ -9,6 +9,7 @@ import { readJson, updateJson, createMutex } from "./jsonStore.js";
 import { workdays } from "./time.js";
 import { dailyTitle, weeklyTitle, monthlyTitle } from "./titles.js";
 import { dailyXml, summaryXml } from "./render.js";
+import { writeMarkdownExport } from "./markdown.js";
 
 type PublishedEntry = { documentId?: string; url?: string; title?: string; [key: string]: unknown };
 type PublishedIndex = Record<string, PublishedEntry>;
@@ -32,9 +33,10 @@ export function run(date: string, force = false) {
     const doc = await publishReport(date, xml, settings, secrets, publishedIndex[date]?.documentId);
     const reportDir = join(dataDir, "reports"); await mkdir(reportDir, { recursive: true });
     await writeFile(join(reportDir, `${date}.md`), report, { mode: 0o600 });
+    const markdownPath = await writeMarkdownExport(`daily-${date}.md`, report, settings);
     await updateJson<PublishedIndex>(publishedFile, {}, index => ({ ...index, [date]: { date, events: activities.length, ...doc } }));
-    await logRun({ status: "success", date, document: doc, manifest });
-    return { date, events: activities.length, ...doc };
+    await logRun({ status: "success", date, document: doc, manifest, markdownPath });
+    return { date, events: activities.length, markdownPath, ...doc };
   });
 }
 
@@ -57,8 +59,9 @@ export function runSummary(kind: "weekly" | "monthly", start: string, end: strin
     const reportDir = join(dataDir, "reports"); await mkdir(reportDir, { recursive: true });
     const filename = kind === "weekly" ? `weekly-${start}.md` : `monthly-${start.slice(0, 7)}.md`;
     await writeFile(join(reportDir, filename), report, { mode: 0o600 });
+    const markdownPath = await writeMarkdownExport(filename, report, settings);
     await updateJson<PublishedIndex>(publishedFile, {}, index => ({ ...index, [key]: { kind, start, end, sourceDays: sourceReports.length, ...doc } }));
-    await logRun({ status: "success", kind, start, end, sourceDays: sourceReports.length, document: doc });
-    return { kind, start, end, sourceDays: sourceReports.length, ...doc };
+    await logRun({ status: "success", kind, start, end, sourceDays: sourceReports.length, markdownPath, document: doc });
+    return { kind, start, end, sourceDays: sourceReports.length, markdownPath, ...doc };
   });
 }

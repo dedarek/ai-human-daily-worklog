@@ -270,7 +270,7 @@ Worklog 的目标不只是生成一份日报，而是成为 AI 时代个人可�
 ### 不止飞书：更多归档目的地
 
 - [x] 飞书知识库，按「月份 → 周 → 日」自动归档
-- [ ] 本地 Markdown 文件夹，适配 Obsidian、Logseq 和普通 Git 仓库
+- [x] 本地 Markdown 文件夹，适配 Obsidian、Logseq 和普通 Git 仓库
 - [ ] Notion 页面与数据库
 - [ ] Google Docs / Google Drive
 - [ ] Microsoft 365：OneNote、SharePoint 与 Word

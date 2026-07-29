@@ -22,6 +22,8 @@ export const defaults: Settings = {
   capturePaused: false,
   redactionEnabled: true,
   redactionTerms: [],
+  markdownOutputEnabled: true,
+  markdownOutputDir: join(dataDir, "exports"),
   llmBaseUrl: "https://api.openai.com/v1",
   llmProtocol: "openai",
   llmModel: "gpt-4.1-mini",
