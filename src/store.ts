@@ -60,9 +60,9 @@ async function keychain(command: "add-generic-password" | "find-generic-password
   const { stdout } = await exec("security", args);
   return stdout.trim();
 }
-function runWithInput(command: string, args: string[], input: string) {
+function runWithInput(command: string, args: string[], input: string, env: NodeJS.ProcessEnv = process.env) {
   return new Promise<string>((resolve, reject) => {
-    const child = spawn(command, args, { stdio: ["pipe", "pipe", "pipe"], windowsHide: true });
+    const child = spawn(command, args, { stdio: ["pipe", "pipe", "pipe"], windowsHide: true, env });
     let stdout = "", stderr = "";
     child.stdout.on("data", chunk => stdout += chunk);
     child.stderr.on("data", chunk => stderr += chunk);
@@ -73,6 +73,7 @@ function runWithInput(command: string, args: string[], input: string) {
 }
 
 const powershell = () => process.env.SystemRoot ? join(process.env.SystemRoot, "System32", "WindowsPowerShell", "v1.0", "powershell.exe") : "powershell.exe";
+const windowsPowerShellEnv = () => Object.fromEntries(Object.entries(process.env).filter(([name]) => name.toUpperCase() !== "PSMODULEPATH"));
 
 export async function saveSecrets(secrets: Partial<Secrets>) {
   if (!secrets.llmApiKey) return;
@@ -82,8 +83,8 @@ export async function saveSecrets(secrets: Partial<Secrets>) {
   }
   await mkdir(dataDir, { recursive: true });
   if (worklogPlatform() === "windows") {
-    const script = "$plain=[Console]::In.ReadToEnd(); $bytes=[Text.Encoding]::UTF8.GetBytes($plain); $cipher=[System.Security.Cryptography.ProtectedData]::Protect($bytes,$null,[System.Security.Cryptography.DataProtectionScope]::CurrentUser); [Convert]::ToBase64String($cipher)";
-    const encrypted = await runWithInput(powershell(), ["-NoProfile", "-NonInteractive", "-Command", script], secrets.llmApiKey);
+    const script = "$plain=[Console]::In.ReadToEnd(); ConvertFrom-SecureString (ConvertTo-SecureString $plain -AsPlainText -Force)";
+    const encrypted = await runWithInput(powershell(), ["-NoProfile", "-NonInteractive", "-Command", script], secrets.llmApiKey, windowsPowerShellEnv());
     await writeFile(join(dataDir, "secrets.dpapi"), encrypted, { mode: 0o600 });
     return;
   }
@@ -102,8 +103,8 @@ export async function getSecrets(): Promise<Secrets> {
   if (worklogPlatform() === "windows") {
     try {
       const encrypted = await readFile(join(dataDir, "secrets.dpapi"), "utf8");
-      const script = "$cipher=[Convert]::FromBase64String([Console]::In.ReadToEnd()); $bytes=[System.Security.Cryptography.ProtectedData]::Unprotect($cipher,$null,[System.Security.Cryptography.DataProtectionScope]::CurrentUser); [Text.Encoding]::UTF8.GetString($bytes)";
-      return { llmApiKey: await runWithInput(powershell(), ["-NoProfile", "-NonInteractive", "-Command", script], encrypted) };
+      const script = "$cipher=[Console]::In.ReadToEnd(); $secure=ConvertTo-SecureString $cipher; $ptr=[Runtime.InteropServices.Marshal]::SecureStringToBSTR($secure); try {[Runtime.InteropServices.Marshal]::PtrToStringBSTR($ptr)} finally {[Runtime.InteropServices.Marshal]::ZeroFreeBSTR($ptr)}";
+      return { llmApiKey: await runWithInput(powershell(), ["-NoProfile", "-NonInteractive", "-Command", script], encrypted, windowsPowerShellEnv()) };
     } catch { return { llmApiKey: process.env.WORKLOG_LLM_API_KEY || "" }; }
   }
   try {
