@@ -22,6 +22,22 @@ async function fetchPost(url: string, headers: Record<string, string>, payload: 
   return { status: response.status, text: await response.text() };
 }
 
+function openAIResponseText(raw: string) {
+  if (!raw.trimStart().startsWith("data:")) {
+    const body: any = JSON.parse(raw);
+    return body.choices?.[0]?.message?.content as string || "";
+  }
+  let content = "";
+  for (const line of raw.split(/\r?\n/)) {
+    if (!line.startsWith("data:")) continue;
+    const data = line.slice(5).trim();
+    if (!data || data === "[DONE]") continue;
+    const chunk: any = JSON.parse(data);
+    content += chunk.choices?.[0]?.delta?.content ?? chunk.choices?.[0]?.message?.content ?? "";
+  }
+  return content;
+}
+
 async function callModel(prompt: string, settings: Settings, secrets: Secrets, maxTokens = 1800) {
   if (!secrets.llmApiKey) throw new Error("请先在设置中填写 LLM API Key。");
   const base = settings.llmBaseUrl.replace(/\/$/, "");
@@ -33,7 +49,13 @@ async function callModel(prompt: string, settings: Settings, secrets: Secrets, m
   let lastError: any;
   for (let attempt = 1; attempt <= 3; attempt++) {
     try {
-      const payload = { model: settings.llmModel, messages: [{ role: "user", content: prompt }], temperature: 0.2, max_tokens: maxTokens };
+      const payload = {
+        model: settings.llmModel,
+        messages: [{ role: "user", content: prompt }],
+        temperature: 0.2,
+        max_tokens: maxTokens,
+        ...(settings.llmProtocol === "openai" ? { stream: true } : {}),
+      };
       response = settings.llmProtocol === "openai" ? await fetchPost(url, headers, payload) : await curlPost(url, headers, payload);
       break;
     }
@@ -44,10 +66,9 @@ async function callModel(prompt: string, settings: Settings, secrets: Secrets, m
   }
   if (!response) throw new Error(`LLM 网络请求失败（已重试 3 次）：${lastError?.cause?.message ?? lastError?.message ?? String(lastError)}`);
   if (response.status < 200 || response.status >= 300) throw new Error(`LLM 请求失败：${response.status} ${response.text}`);
+  if (settings.llmProtocol === "openai") return openAIResponseText(response.text) || "模型没有返回报告内容。";
   const body: any = JSON.parse(response.text);
-  return settings.llmProtocol === "anthropic"
-    ? body.content?.filter((item: any) => item.type === "text").map((item: any) => item.text).join("\n") || "模型没有返回报告内容。"
-    : body.choices?.[0]?.message?.content as string || "模型没有返回报告内容。";
+  return body.content?.filter((item: any) => item.type === "text").map((item: any) => item.text).join("\n") || "模型没有返回报告内容。";
 }
 
 export async function writeMeetingMinutes(title: string, startedAt: string, endedAt: string, transcript: string, settings: Settings, secrets: Secrets) {

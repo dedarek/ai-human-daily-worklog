@@ -19,4 +19,4 @@ const sample = () => getSettings().then(sampleOperation).catch(error => logRun({
 setInterval(sample, 60_000);
 void sample();
 
-app.listen(4318, "127.0.0.1", () => console.log("Mac Worklog is running at http://127.0.0.1:4318"));
+app.listen(4318, "127.0.0.1", () => console.log("Worklog is running at http://127.0.0.1:4318"));

@@ -1,8 +1,8 @@
 {
-  "name": "mac-worklog-feishu",
+  "name": "worklog",
   "version": "0.1.0",
   "private": true,
-  "description": "Local-first macOS worklog collector that writes daily, weekly and monthly reports to Feishu through lark-cli.",
+  "description": "Local-first macOS work journal that turns activity and Teams meetings into Feishu reports.",
   "type": "module",
   "scripts": {
     "dev": "tsx src/server.ts",

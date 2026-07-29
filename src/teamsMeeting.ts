@@ -174,19 +174,24 @@ async function transcribeAndPublish(record: MeetingRecord) {
   const settings = await getSettings(); const secrets = await getSecrets();
   const transcriptBase = record.transcriptPath!.replace(/\.txt$/, "");
   try {
-    if (!existsSync(settings.whisperCliPath)) throw new Error(`未找到本地转写程序：${settings.whisperCliPath}`);
-    if (!existsSync(settings.whisperModelPath)) throw new Error(`未找到本地转写模型：${settings.whisperModelPath}`);
-    const { stderr: volumeLog } = await exec(ffmpegPath(), ["-hide_banner", "-i", record.audioPath!, "-af", "volumedetect", "-f", "null", "-"], { timeout: 180_000, maxBuffer: 4 * 1024 * 1024 });
-    const maxVolume = Number(volumeLog.match(/max_volume:\s*(-?[\d.]+)\s*dB/i)?.[1] ?? "-Infinity");
-    if (!Number.isFinite(maxVolume) || maxVolume <= -80) {
-      record.status = "ignored";
-      record.error = "系统音频全程静音，未纳入日报；会议期间没有捕获到电脑播放的声音。";
-      await saveMeeting(record);
-      await logRun({ status: "meeting_ignored", kind: "meeting", meetingId: record.id, title: record.title, reason: record.error });
-      return;
+    let transcript = record.transcriptPath && existsSync(record.transcriptPath)
+      ? (await readFile(record.transcriptPath, "utf8")).trim()
+      : "";
+    if (!transcript) {
+      if (!existsSync(settings.whisperCliPath)) throw new Error(`未找到本地转写程序：${settings.whisperCliPath}`);
+      if (!existsSync(settings.whisperModelPath)) throw new Error(`未找到本地转写模型：${settings.whisperModelPath}`);
+      const { stderr: volumeLog } = await exec(ffmpegPath(), ["-hide_banner", "-i", record.audioPath!, "-af", "volumedetect", "-f", "null", "-"], { timeout: 180_000, maxBuffer: 4 * 1024 * 1024 });
+      const maxVolume = Number(volumeLog.match(/max_volume:\s*(-?[\d.]+)\s*dB/i)?.[1] ?? "-Infinity");
+      if (!Number.isFinite(maxVolume) || maxVolume <= -80) {
+        record.status = "ignored";
+        record.error = "系统音频全程静音，未纳入日报；会议期间没有捕获到电脑播放的声音。";
+        await saveMeeting(record);
+        await logRun({ status: "meeting_ignored", kind: "meeting", meetingId: record.id, title: record.title, reason: record.error });
+        return;
+      }
+      await exec(settings.whisperCliPath, ["-m", settings.whisperModelPath, "-f", record.audioPath!, "-l", "auto", "-otxt", "-of", transcriptBase, "-nt", "-np"], { timeout: 3_600_000, maxBuffer: 20 * 1024 * 1024 });
+      transcript = (await readFile(record.transcriptPath!, "utf8")).trim();
     }
-    await exec(settings.whisperCliPath, ["-m", settings.whisperModelPath, "-f", record.audioPath!, "-l", "auto", "-otxt", "-of", transcriptBase, "-nt", "-np"], { timeout: 3_600_000, maxBuffer: 20 * 1024 * 1024 });
-    const transcript = (await readFile(record.transcriptPath!, "utf8")).trim();
     const quality = transcriptQuality(transcript);
     if (!quality.valid) {
       record.status = "ignored";
@@ -216,6 +221,23 @@ async function transcribeAndPublish(record: MeetingRecord) {
     record.status = "failed"; record.error = String(error); await saveMeeting(record);
     await logRun({ status: "failed", kind: "meeting", meetingId: record.id, title: record.title, error: String(error) });
   }
+}
+
+export async function retryTeamsMeeting(id: string) {
+  if (current?.id === id) throw new Error("该会议仍在录制，请结束后再重试。");
+  const record = (await loadMeetings()).find(item => item.id === id);
+  if (!record) throw new Error("未找到该会议记录。");
+  if (!record.endedAt || !record.transcriptPath || !existsSync(record.transcriptPath)) {
+    throw new Error("该会议没有可复用的逐字稿，无法重试整理。");
+  }
+  if (!(await readFile(record.transcriptPath, "utf8")).trim()) {
+    throw new Error("该会议的逐字稿为空，无法重试整理。");
+  }
+  record.status = "summarizing";
+  delete record.error;
+  await saveMeeting(record);
+  await transcribeAndPublish(record);
+  return record;
 }
 
 export async function startTeamsMeeting(origin: "automatic" | "manual" = "manual", requestedTitle?: string) {

@@ -9,7 +9,7 @@ import { schedule } from "./scheduler.js";
 import { dataDir, getSecrets, getSettings, logRun, saveSecrets, saveSettings } from "./store.js";
 import { isoDate } from "./time.js";
 import type { Settings } from "./types.js";
-import { getTeamsMeetingStatus, listTeamsMeetings, startTeamsMeeting, stopTeamsMeeting } from "./teamsMeeting.js";
+import { getTeamsMeetingStatus, listTeamsMeetings, retryTeamsMeeting, startTeamsMeeting, stopTeamsMeeting } from "./teamsMeeting.js";
 
 const legacyKeys = ["feishuAppId", "feishuAppSecret", "feishuFolderToken", "feishuWikiSpaceId", "titlePrefix", "teamsAudioDevice", "teamsMicrophoneDevice"];
 
@@ -94,6 +94,7 @@ export function registerRoutes(app: Express) {
   app.get("/api/meetings", async (_req, res) => res.json(await listTeamsMeetings()));
   app.post("/api/meeting/start", async (req, res) => { try { res.json(await startTeamsMeeting("manual", String(req.body?.title ?? ""))); } catch (error) { res.status(400).json({ error: String(error) }); } });
   app.post("/api/meeting/stop", async (_req, res) => { try { res.json(await stopTeamsMeeting()); } catch (error) { res.status(400).json({ error: String(error) }); } });
+  app.post("/api/meeting/:id/retry", async (req, res) => { try { res.json(await retryTeamsMeeting(String(req.params.id))); } catch (error) { res.status(400).json({ error: String(error) }); } });
 
   app.get("/api/status", async (_req, res) => {
     const settings = await getSettings();

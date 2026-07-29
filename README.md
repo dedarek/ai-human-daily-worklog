@@ -1,37 +1,91 @@
-# Mac Worklog → 飞书
+<div align="center">
 
-一个只在本机运行的 macOS 工作留痕工具。它在工作时间采集有效操作和 Microsoft Teams 会议，在本机完成会议转写，调用可配置的 LLM 统一整理成日报，并通过飞书 CLI 以用户身份写入飞书知识库。
+# Worklog
 
-## 能做什么
+### 每个 App 都有日志。现在，你的一天也有了。
 
-- 工作日 08:00–18:00 采集有效操作，不记录键盘输入、剪贴板、截图或浏览器正文。
-- 工作日 18:00 生成并覆盖当天日报。
-- 周一 08:00 汇总上周工作日，生成周报。
-- 每月 1 日 08:10 汇总上月工作日，生成月报。
-- 按“月 → 周 → 日报”组织飞书知识库。
-- 前端查看配置状态、最近执行结果并手动生成日报。
-- 通过 Teams 进程的真实音频活动自动识别通话，直接采集 Mac 播放的系统声音（不使用麦克风），并使用本地 Whisper 模型转写。
-- 会议结束后过滤静音、重复词和识别噪声，把有效讨论、结论和待办作为普通工作内容纳入当日日报，不创建独立会议文档。
-- LLM API Key 保存在 macOS Keychain；活动记录和文档索引保存在本机 `data/`。
-- 使用 LaunchAgent 登录自启并在异常退出后自动恢复。
+Worklog 把散落在 Agent、终端、应用和会议里的工作重新汇合，过滤掉与工作无关的噪声，自动生成日报、周报和月报，并按「月 → 周 → 日」归档到飞书知识库。
 
-## 为什么使用飞书 CLI
+![macOS](https://img.shields.io/badge/macOS-13%2B-111111?logo=apple&logoColor=white)
+![Node.js](https://img.shields.io/badge/Node.js-20%2B-339933?logo=nodedotjs&logoColor=white)
+![Local first](https://img.shields.io/badge/local--first-yes-5b5bd6)
+![Microsoft Teams](https://img.shields.io/badge/Teams-meeting_capture-6264A7?logo=microsoftteams&logoColor=white)
+![Feishu](https://img.shields.io/badge/Feishu-CLI-3370FF)
 
-项目不再保存飞书机器人 App ID / App Secret，也不自行维护 tenant token。飞书文档和知识库操作统一使用官方 `lark-cli --as user`：
+[快速开始](#快速开始) · [工作原理](#工作原理) · [Teams-会议](#teams-会议) · [隐私](#数据与隐私) · [排障](#常见问题)
 
-- 文档归属和权限符合当前登录用户；
-- 用户认证、token 刷新和权限错误由 CLI 统一处理；
-- 文档覆盖使用 CLI 的 Markdown 导入能力，自动转换成飞书原生标题、段落和列表块。
+</div>
 
-官方安装说明：[飞书 CLI 安装指南](https://open.feishu.cn/document/no_class/mcp-archive/feishu-cli-installation-guide.md)。
+> Worklog 目前只支持 macOS。图形化 `.dmg` 安装包正在规划中，当前版本仍需从源码初始化。
 
-## 环境要求
+## 为什么是 Worklog
 
-- macOS
+每个 App 都有自己的 log，但你工作了一整天，却没有一份属于自己的工作档案。
+
+过去，我们会在下班前努力回忆：今天做了什么、解决了什么、会议里决定了什么，然后手写一份日报。也许那曾经够用。但现在是 2026 年——你可能同时开着三个 Claude Code、一个 OpenCode 和两个 Codex，在无数上下文、Agent 与 Sub-agent 之间穿梭。任务被并行执行，结论散落在不同会话里，很多真正完成的工作甚至没有经过你的键盘。
+
+问题已经不是「懒得写日报」，而是人很难完整重建这张分布式的工作现场。
+
+Worklog 为此而生。它从电脑上已经存在的操作和 Agent 执行记录中还原工作过程，把应用活动、终端命令、代码任务与 Teams 会议放回同一天的上下文，再由你选择的 LLM 过滤、归纳和总结。最终留下的不是工具调用流水账，而是一份关于项目进展、实际产出、关键判断和当前状态的个人工作档案。
+
+当然，那些与工作无关的事情会被过滤掉。
+
+当前版本会深度解析 Claude Code 与 Codex 的执行日志；其他 Agent 工具暂时通过前台应用和终端活动提供线索，后续将逐步增加原生日志解析器。
+
+## 功能一览
+
+| 能力 | Worklog 的处理方式 |
+| --- | --- |
+| 工作操作 | 工作日 08:00–18:00 采集前台应用、窗口标题与可确认的终端/开发工具活动 |
+| Teams 会议 | 根据 Teams 的真实音频活动自动开始和结束，录制系统播放声音，不使用麦克风 |
+| 本地转写 | 使用 whisper.cpp 在 Mac 本机把会议音频转成文字 |
+| 智能整理 | 调用可配置的 OpenAI 或 Anthropic 兼容接口，围绕项目、成果与判断生成内容 |
+| 飞书发布 | 通过飞书 CLI 以当前用户身份写入知识库，不保存机器人密钥 |
+| 自动归档 | 自动维护「月份 → 周 → 日报」层级，并在同一知识体系中生成周报和月报 |
+| 可视化管理 | 在本地页面配置 LLM、飞书位置和会议能力，查看最近生成与失败记录 |
+| 后台运行 | 登录后自动启动，异常退出后由 macOS LaunchAgent 恢复 |
+
+## 工作原理
+
+```mermaid
+flowchart LR
+    A["应用与开发操作"] --> D["本地证据库"]
+    B["Teams 系统音频"] --> C["本地 Whisper 转写"]
+    C --> D
+    D --> E["你配置的 LLM"]
+    E --> F["日报 / 周报 / 月报"]
+    F --> G["飞书知识库"]
+```
+
+默认节奏：
+
+- 工作日 18:00：覆盖生成当天 08:00–18:00 的日报；
+- 周一 08:00：汇总上一个自然周的工作日，生成周报；
+- 每月 1 日 08:10：汇总上一个自然月，生成月报。
+
+生成内容强调完成了什么、为什么这样处理、当前结果如何。采集器自身的运行、飞书同步过程、无业务意义的硬件事件和重复噪声不会被包装成工作成果。
+
+## 快速开始
+
+### 1. 准备环境
+
+- macOS 13 或更高版本
 - Node.js 20+
-- 飞书 CLI
+- [飞书 CLI](https://open.feishu.cn/document/no_class/mcp-archive/feishu-cli-installation-guide.md)
 - FFmpeg
-- whisper.cpp 与 GGML Whisper 模型
+- whisper.cpp 与 GGML Whisper 模型（启用 Teams 会议时需要）
+
+### 2. 启动 Worklog
+
+```bash
+npm install
+npm run build-native
+npm start
+```
+
+打开 [http://127.0.0.1:4318](http://127.0.0.1:4318)。管理页面只监听本机地址，不会暴露给局域网或互联网。
+
+### 3. 完成首次初始化
 
 ```bash
 npm install -g @larksuite/cli
@@ -41,33 +95,24 @@ lark-cli auth login --recommend
 lark-cli auth status --json --verify
 ```
 
-文档和知识库操作必须使用已授权的 `user` 身份，而不是 `bot` 身份。
+随后在 Worklog 页面完成四件事：
 
-## 安装与初始化
-
-```bash
-git clone <repository-url>
-cd mac-worklog-feishu
-npm install
-npm run build-native
-npm start
-```
-
-打开 [http://127.0.0.1:4318](http://127.0.0.1:4318)，依次确认：
-
-1. 飞书 CLI 显示已连接到正确的用户；
+1. 确认飞书 CLI 已连接到正确的用户；
 2. 填写 LLM 协议、API 地址、模型和 API Key；
 3. 粘贴目标飞书知识库父页面链接并绑定；
-4. 保存配置，点击“立即生成今天日报”完成首次验证。
-5. 在“Teams 会议”中启用会议采集，确认页面显示 Teams 已就绪。
+4. 点击「立即生成今天日报」完成第一次验证。
 
-可以运行诊断命令检查安装状态：
+运行自检可以一次确认主要依赖：
 
 ```bash
 npm run doctor
 ```
 
-首次安装 Teams 转写依赖：
+## Teams 会议
+
+Worklog 直接采集 Mac 正在播放的系统声音。即使你全程静音，其他参会人的发言仍可被记录；麦克风不会被读取。
+
+首次启用时安装本地转写依赖：
 
 ```bash
 brew install ffmpeg whisper-cpp
@@ -75,7 +120,9 @@ mkdir -p data/models
 curl -L -o data/models/ggml-small.bin https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-small.bin
 ```
 
-项目使用 macOS ScreenCaptureKit 直接采集电脑正在播放的系统声音，不读取麦克风；即使自己全程静音，也能转写其他参会人的发言。首次使用时 macOS 会要求“屏幕与系统音频录制”权限。系统通过 CoreAudio 判断 Teams 进程是否正在进行音频 I/O，窗口标题只用于入会阶段兜底和提取会议名称，不依赖会议标题关键词；页面仍提供手动开始和停止按钮。
+macOS 会在第一次录制时请求「屏幕与系统音频录制」权限。Worklog 通过 CoreAudio 判断 Teams 是否存在真实音频 I/O，窗口标题只用于入会阶段的辅助判断和会议命名，不依赖固定标题关键词。页面中也保留了手动开始、停止和失败重试入口。
+
+会议结束后，转写文本先经过静音、重复词和识别噪声过滤，再与当天其他工作证据一起交给 LLM。有效讨论、结论和待办会进入当日日报，不会另外创建会议文档。
 
 ## 保持后台运行
 
@@ -83,68 +130,75 @@ curl -L -o data/models/ggml-small.bin https://huggingface.co/ggerganov/whisper.c
 npm run install-service
 ```
 
-该命令安装 `~/Library/LaunchAgents/com.local.mac-worklog-feishu.plist`。服务仅监听 `127.0.0.1:4318`，不会对局域网或互联网开放管理界面。
+安装完成后，Worklog 会随当前 macOS 用户登录启动，并在意外退出后自动恢复。内部 LaunchAgent 标识仍为 `com.local.mac-worklog-feishu`，这是为了兼容已经安装的版本，不影响产品显示名称。
 
 ## 数据与隐私
 
-以下内容不会提交到 Git：
+Worklog 采用本地优先设计：
 
-- `data/settings.json`：本机配置；
-- `data/operations/`：前台应用采样和终端命令；
-- `data/evidence/`：结构化证据与校验清单；
-- `data/reports/`：生成后的本地报告副本；
-- `data/meetings/`：Teams 会议录音、逐字稿与会议纪要；
-- `data/models/`：本地 Whisper 模型；
-- `data/published.json`、`data/wiki-index.json`：飞书文档和目录索引；
-- LLM API Key：仅存储于 macOS Keychain。
+- 不记录键盘输入、剪贴板、截图或浏览器正文；
+- 原始活动、会议音频、逐字稿、报告副本和飞书索引都保存在本机 `data/`；
+- LLM API Key 保存在 macOS Keychain；
+- 原始会议音频不会发送给 LLM，也不会上传飞书；
+- 只有生成报告所需的操作证据与有效逐字稿会发给你配置的 LLM 服务；
+- `data/`、本机设置和密钥均被 Git 忽略。
 
-操作记录和有效会议逐字稿会发送到你配置的 LLM 服务，用于生成日报；原始会议音频不会发送给 LLM，也不会上传飞书。请根据所用服务商的数据政策决定是否启用，以及是否需要进一步脱敏。
+你仍应根据所用 LLM 服务商的数据政策，决定是否启用远程生成以及是否需要额外脱敏。
 
 ## 项目结构
 
 ```text
 src/
-  agentLogs.ts   Claude Code / Codex 执行日志解析
-  collector.ts   工作时间窗过滤与证据聚合
-  larkCli.ts     飞书 CLI 调用、认证状态和错误处理
-  feishu.ts      知识库层级与文档发布
-  llm.ts         日报、周报和月报生成
-  render.ts      报告 Markdown → 飞书富文档 XML（高亮框/彩色状态表格/待办勾选框）
-  titles.ts      飞书文档标题统一命名（纯函数，可单测）
-  sampler.ts     macOS 前台应用采样
-  meetingDetect.ts Teams 会议标题与信号识别（纯函数，可单测）
-  teamsMeeting.ts Teams 自动检测、录音、转写、日报素材写入与崩溃恢复
-  reportRunner.ts 日报/周报/月报生成流程（串行执行）
-  scheduler.ts   基于配置的 cron 定时任务
-  routes.ts      本地 HTTP 接口
-  jsonStore.ts   按文件串行的 JSON 读写
-  time.ts        日期与时间窗纯函数
-  server.ts      装配 Express、定时任务与采样
-native/          Teams 音频活动检测器
-public/          本地配置与运行历史页面
-scripts/         自检、终端采集和 LaunchAgent 安装
-test/            纯函数单元测试（node:test）
+  sampler.ts        macOS 前台应用采样
+  agentLogs.ts      开发工具执行记录解析
+  collector.ts      工作时间窗过滤与证据聚合
+  teamsMeeting.ts   Teams 检测、录制、转写与恢复
+  llm.ts            日报、周报和月报生成
+  reportRunner.ts   报告生成与发布流程
+  larkCli.ts        飞书 CLI 认证与调用
+  feishu.ts         知识库层级和文档发布
+  render.ts         飞书富文档渲染
+  scheduler.ts      定时任务
+  routes.ts         本地管理接口
+native/             macOS 音频活动检测与系统音频采集
+public/             本地配置和运行历史页面
+scripts/            自检与 LaunchAgent 安装
+test/               单元测试
 ```
 
 ## 常见问题
 
-### 飞书 CLI 显示需要刷新
+<details>
+<summary>飞书 CLI 显示需要刷新</summary>
 
-先运行：
+运行：
 
 ```bash
 lark-cli auth status --json --verify
 ```
 
-CLI 会在下一次用户 API 调用时自动刷新仍有效的登录态。如果授权已失效，重新执行 `lark-cli auth login --recommend`。
+仍然失效时，重新执行 `lark-cli auth login --recommend`。
 
-### 关闭终端后服务停止
+</details>
 
-执行 `npm run install-service`，再运行 `launchctl print gui/$(id -u)/com.local.mac-worklog-feishu` 检查服务状态。
+<details>
+<summary>关闭终端后服务停止</summary>
 
-### 为什么报告没有记录下班后的操作
+安装后台服务：
 
-这是预期行为。日报和原始证据只纳入工作日 08:00–18:00 的活动。
+```bash
+npm run install-service
+launchctl print gui/$(id -u)/com.local.mac-worklog-feishu
+```
+
+</details>
+
+<details>
+<summary>为什么报告没有记录晚上或周末的操作</summary>
+
+默认只纳入工作日 08:00–18:00。可以在本地管理页面修改日报计划和时区；工作时间窗目前按产品默认规则执行。
+
+</details>
 
 ## 开发
 
@@ -154,3 +208,18 @@ npm run check
 npm test
 node --check public/app.js
 ```
+
+## Roadmap
+
+- [ ] 提供签名、公证的 macOS `.dmg` 安装包
+- [ ] 把首次授权、依赖检查和模型下载整合进安装向导
+- [ ] 增加睡眠或关机错过定时任务后的自动补跑
+- [ ] 增加可选的本地敏感信息脱敏规则
+
+## 致谢
+
+- Teams 会议自动检测思路参考 [qaid/meeting-minutes-autodetect](https://github.com/qaid/meeting-minutes-autodetect)
+- 本地语音转写由 [whisper.cpp](https://github.com/ggerganov/whisper.cpp) 提供
+- 飞书文档与知识库操作使用官方 [飞书 CLI](https://open.feishu.cn/document/no_class/mcp-archive/feishu-cli-installation-guide.md)
+
+第三方许可见 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。
