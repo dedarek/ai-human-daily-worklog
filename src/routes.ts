@@ -11,6 +11,8 @@ import { isoDate } from "./time.js";
 import type { Settings } from "./types.js";
 import { readAudit } from "./collector.js";
 import { getTeamsMeetingStatus, listTeamsMeetings, retryTeamsMeeting, startTeamsMeeting, stopTeamsMeeting } from "./teamsMeeting.js";
+import { beginLarkLogin, configureLark, onboardingStatus, requestPermission, startModelDownload } from "./onboarding.js";
+import { readJson } from "./jsonStore.js";
 
 const legacyKeys = ["feishuAppId", "feishuAppSecret", "feishuFolderToken", "feishuWikiSpaceId", "titlePrefix", "teamsAudioDevice", "teamsMicrophoneDevice"];
 
@@ -26,6 +28,16 @@ async function reportRuns() {
 }
 
 export function registerRoutes(app: Express) {
+  app.get("/api/onboarding/status", async (_req, res) => { try { res.json(await onboardingStatus()); } catch (error) { res.status(400).json({ error: String(error) }); } });
+  app.post("/api/onboarding/permission/:kind", async (req, res) => {
+    const kind = req.params.kind === "screen" ? "screen" : req.params.kind === "accessibility" ? "accessibility" : null;
+    if (!kind) return res.status(400).json({ error: "未知权限类型。" });
+    try { res.json(await requestPermission(kind)); } catch (error) { res.status(400).json({ error: String(error) }); }
+  });
+  app.post("/api/onboarding/lark-config", async (req, res) => { try { res.json(await configureLark(String(req.body?.appId ?? "").trim(), String(req.body?.appSecret ?? ""))); } catch (error) { res.status(400).json({ error: String(error) }); } });
+  app.post("/api/onboarding/lark-login", async (_req, res) => { try { res.json(await beginLarkLogin()); } catch (error) { res.status(400).json({ error: String(error) }); } });
+  app.post("/api/onboarding/model", async (_req, res) => res.json(startModelDownload()));
+
   app.get("/api/settings", async (_req, res) => res.json(await getSettings()));
 
   app.post("/api/settings", async (req, res) => {
@@ -110,6 +122,12 @@ export function registerRoutes(app: Express) {
       dataPath: dataDir,
       lastRun: runs.at(-1) ?? null,
     });
+  });
+
+  app.get("/api/menu/status", async (_req, res) => {
+    const settings = await getSettings(); const today = isoDate();
+    const published = await readJson<Record<string, { url?: string }>>(join(dataDir, "published.json"), {});
+    res.json({ running: true, capturePaused: settings.capturePaused, todayUrl: published[today]?.url || "", setupReady: (await onboardingStatus()).complete });
   });
 
   app.get("/api/runs", async (_req, res) => {

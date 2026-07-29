@@ -5,6 +5,7 @@ PROJECT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 DATA_DIR="${WORKLOG_DATA_DIR:-$HOME/Library/Application Support/Worklog}"
 mkdir -p "$DATA_DIR/bin"
 /usr/bin/swiftc "$PROJECT_DIR/native/TeamsAudioStatus.swift" -o "$DATA_DIR/bin/teams-audio-status"
+/usr/bin/swiftc "$PROJECT_DIR/native/PermissionStatus.swift" -framework ApplicationServices -framework AppKit -o "$DATA_DIR/bin/permission-status"
 /usr/bin/swiftc -parse-as-library \
   -framework AVFoundation \
   -framework CoreGraphics \

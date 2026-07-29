@@ -5,3 +5,6 @@ data/
 .env.*
 !.env.example
 npm-debug.log*
+dist/
+build/
+release/

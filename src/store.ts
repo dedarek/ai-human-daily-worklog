@@ -32,7 +32,7 @@ export const defaults: Settings = {
   feishuWikiNodeToken: "",
   teamsMeetingEnabled: true,
   teamsAutoRecord: true,
-  whisperCliPath: "/opt/homebrew/bin/whisper-cli",
+  whisperCliPath: process.env.WORKLOG_BUNDLED_WHISPER_CLI || "/opt/homebrew/bin/whisper-cli",
   whisperModelPath: join(dataDir, "models", "ggml-small.bin"),
 };
 

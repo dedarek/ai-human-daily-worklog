@@ -12,11 +12,16 @@ app.use(express.static(join(process.cwd(), "public")));
 registerRoutes(app);
 
 await setupStore();
-await schedule();
-startTeamsMonitor();
+if (process.env.WORKLOG_DISABLE_BACKGROUND !== "1") {
+  await schedule();
+  startTeamsMonitor();
+}
 
 const sample = () => getSettings().then(sampleOperation).catch(error => logRun({ status: "sample_failed", error: String(error) }));
-setInterval(sample, 60_000);
-void sample();
+if (process.env.WORKLOG_DISABLE_BACKGROUND !== "1") {
+  setInterval(sample, 60_000);
+  void sample();
+}
 
-app.listen(4318, "127.0.0.1", () => console.log("Worklog is running at http://127.0.0.1:4318"));
+const port = Number(process.env.WORKLOG_PORT || 4318);
+app.listen(port, "127.0.0.1", () => console.log(`Worklog is running at http://127.0.0.1:${port}`));

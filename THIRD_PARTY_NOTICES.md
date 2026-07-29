@@ -11,3 +11,13 @@ Source: https://github.com/qaid/meeting-minutes-autodetect
 Local transcription uses whisper.cpp, which is distributed under the MIT License.
 
 Source: https://github.com/ggml-org/whisper.cpp
+
+The macOS application bundles Node.js, distributed under the Node.js license and its bundled third-party notices.
+
+Source: https://github.com/nodejs/node
+
+The macOS application bundles the official Feishu CLI (`@larksuite/cli`), distributed under the MIT License.
+
+Source: https://github.com/larksuite/cli
+
+The complete license texts shipped with the application are available in `Worklog.app/Contents/Resources/licenses/`.
