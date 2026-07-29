@@ -49,7 +49,7 @@
       <text x="38" y="143" fill="#315C39" font-size="12" font-weight="650">查看今日证据</text>
       <rect x="171" y="116" width="137" height="44" rx="9" fill="#F2E7E4"/>
       <text x="195" y="143" fill="#843E36" font-size="12" font-weight="650">暂停所有采集</text>
-      <text x="22" y="187" fill="#7B847C" font-size="11">密钥保存在 macOS Keychain</text>
+      <text x="22" y="187" fill="#7B847C" font-size="11">密钥保存在系统用户凭据空间</text>
     </g>
 
     <g transform="translate(768 216)">
@@ -85,7 +85,7 @@
       <line x1="22" y1="166" x2="662" y2="166" stroke="#ECECE6"/>
       <text x="24" y="191" fill="#778078" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11">11:42</text>
       <text x="78" y="191" fill="#315C39" font-size="11" font-weight="700">Terminal</text>
-      <text x="156" y="191" fill="#4E584F" font-size="11">构建并验证 macOS 本地采集组件</text>
+      <text x="156" y="191" fill="#4E584F" font-size="11">构建并验证跨平台本地采集组件</text>
     </g>
 
     <g transform="translate(768 450)">

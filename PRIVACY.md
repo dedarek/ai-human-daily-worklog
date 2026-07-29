@@ -7,7 +7,7 @@ Worklog is a local-first personal work archive. It is designed to make collectio
 - frontmost application names and window titles during the configured work window;
 - supported Agent task titles, user prompts, selected tool calls, commands, and file operations;
 - explicitly captured terminal commands;
-- Microsoft Teams system playback audio, local transcripts, and useful meeting summaries;
+- on macOS, Microsoft Teams system playback audio, local transcripts, and useful meeting summaries;
 - generated daily, weekly, and monthly reports;
 - local configuration, run history, evidence manifests, and publishing indexes.
 
@@ -24,7 +24,9 @@ Worklog is a local-first personal work archive. It is designed to make collectio
 
 ## Local storage
 
-Runtime data is stored in `~/Library/Application Support/Worklog/`. LLM API keys are stored in macOS Keychain. The legacy source-tree `data/` directory is copied during migration and retained as a recoverable fallback until the user removes it.
+Runtime data uses the operating system's standard per-user location: `~/Library/Application Support/Worklog/` on macOS, `%APPDATA%\\Worklog` on Windows, and `$XDG_DATA_HOME/worklog` (normally `~/.local/share/worklog`) on Linux.
+
+LLM API keys use macOS Keychain, Windows DPAPI for the current user, or Linux Secret Service when available. On a headless Linux environment without Secret Service, Worklog falls back to an owner-only `secrets.json`; `WORKLOG_LLM_API_KEY` can be used instead to avoid that fallback. The legacy source-tree `data/` migration applies only to the default macOS data directory.
 
 ## Remote transfers
 

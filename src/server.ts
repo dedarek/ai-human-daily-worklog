@@ -8,7 +8,7 @@ import { startTeamsMonitor } from "./teamsMeeting.js";
 
 const app = express();
 app.use(express.json({ limit: "100kb" }));
-app.use(express.static(join(process.cwd(), "public")));
+app.use(express.static(join(process.env.WORKLOG_ASSET_DIR || process.cwd(), "public")));
 registerRoutes(app);
 
 await setupStore();

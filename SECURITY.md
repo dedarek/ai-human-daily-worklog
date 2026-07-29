@@ -20,6 +20,6 @@ Avoid attaching real API keys, work logs, meeting recordings, customer data, or 
 
 ## Security boundaries
 
-Worklog processes sensitive local work context. The web interface listens only on `127.0.0.1`. LLM credentials are stored in macOS Keychain. Raw meeting audio remains local. Filtered text is sent only to the LLM and publishing destinations configured by the user.
+Worklog processes sensitive local work context. The web interface listens only on `127.0.0.1`. LLM credentials use macOS Keychain, Windows DPAPI, or Linux Secret Service (with a documented owner-only fallback). Raw meeting audio remains local. Filtered text is sent only to the LLM and publishing destinations configured by the user.
 
 See [PRIVACY.md](PRIVACY.md) for the complete data flow and user controls.

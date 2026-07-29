@@ -10,14 +10,14 @@
   <main>
     <header>
       <div class="mark">W</div>
-      <div><p class="eyebrow">WELCOME TO WORKLOG</p><h1>把第一次配置，一次做完。</h1><p>四步完成本地采集、飞书、模型和会议转写。配置只保存在这台 Mac。</p></div>
+      <div><p class="eyebrow">WELCOME TO WORKLOG</p><h1>把第一次配置，一次做完。</h1><p id="platformIntro">四步完成本地采集、飞书、模型和可用的会议能力。配置只保存在这台电脑。</p></div>
     </header>
 
     <nav id="progress"><span class="active">1 权限</span><span>2 飞书</span><span>3 模型与归档</span><span>4 完成</span></nav>
     <p id="notice" role="status"></p>
 
     <section id="permissions">
-      <div class="step"><b>01</b><div><h2>允许 Worklog 读取工作上下文</h2><p>系统音频用于 Teams 会议；辅助功能用于识别前台应用和会议窗口。Worklog 不读取麦克风、键盘或屏幕画面。</p></div></div>
+      <div class="step"><b>01</b><div><h2>允许 Worklog 读取工作上下文</h2><p id="permissionHelp">Worklog 只读取前台应用和窗口名称，不读取键盘、剪贴板或页面正文。</p></div></div>
       <div class="checks">
         <article><div><h3>屏幕与系统音频录制</h3><p id="screenState">正在检查…</p></div><button data-permission="screen">授予权限</button></article>
         <article><div><h3>辅助功能</h3><p id="accessibilityState">正在检查…</p></div><button data-permission="accessibility">授予权限</button></article>
@@ -36,20 +36,20 @@
     </section>
 
     <section id="configuration">
-      <div class="step"><b>03</b><div><h2>选择模型与归档位置</h2><p>支持 OpenAI 与 Anthropic 兼容接口。API Key 保存到 macOS Keychain，不写入配置文件。</p></div></div>
+      <div class="step"><b>03</b><div><h2>选择模型与归档位置</h2><p>支持 OpenAI 与 Anthropic 兼容接口。API Key 只保存在当前系统用户的本地凭据空间。</p></div></div>
       <div class="form-grid">
         <label>接口协议<select id="llmProtocol"><option value="openai">OpenAI 兼容</option><option value="anthropic">Anthropic 兼容</option></select></label>
         <label>模型<input id="llmModel" placeholder="gpt-4.1-mini" /></label>
         <label class="wide">API 地址<input id="llmBaseUrl" placeholder="https://api.openai.com/v1" /></label>
-        <label class="wide">API Key<input id="llmApiKey" type="password" placeholder="保存在 macOS Keychain" autocomplete="new-password" /></label>
+        <label class="wide">API Key<input id="llmApiKey" type="password" placeholder="仅保存在这台电脑" autocomplete="new-password" /></label>
         <label class="wide">飞书知识库父页面<input id="wikiUrl" placeholder="https://example.feishu.cn/wiki/..." /></label>
         <div class="wide actions"><button id="saveConfiguration">保存并绑定知识库</button></div>
       </div>
-      <div class="model-card"><div><h3>本地 Whisper Small 模型</h3><p id="modelState">正在检查…</p><div class="bar"><i id="modelProgress"></i></div></div><button id="downloadModel">下载并校验 · 465 MB</button></div>
+      <div class="model-card" id="whisperCard"><div><h3>本地 Whisper Small 模型</h3><p id="modelState">正在检查…</p><div class="bar"><i id="modelProgress"></i></div></div><button id="downloadModel">下载并校验 · 465 MB</button></div>
     </section>
 
     <section id="finish">
-      <div class="step"><b>04</b><div><h2>开始建立你的工作档案</h2><p>Worklog 登录后自动运行。你可以随时从菜单栏暂停采集、生成日报，或打开今天的飞书文档。</p></div></div>
+      <div class="step"><b>04</b><div><h2>开始建立你的工作档案</h2><p>Worklog 登录后自动运行。你可以随时从菜单栏或系统托盘暂停采集、生成日报，或打开今天的飞书文档。</p></div></div>
       <div class="summary" id="summary">正在汇总配置状态…</div>
       <div class="actions"><button id="finishSetup">进入 Worklog</button><button id="refresh" class="secondary">重新检查</button></div>
     </section>

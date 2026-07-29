@@ -13,6 +13,7 @@ import { readAudit } from "./collector.js";
 import { getTeamsMeetingStatus, listTeamsMeetings, retryTeamsMeeting, startTeamsMeeting, stopTeamsMeeting } from "./teamsMeeting.js";
 import { beginLarkLogin, configureLark, onboardingStatus, requestPermission, startModelDownload } from "./onboarding.js";
 import { readJson } from "./jsonStore.js";
+import { platformCapabilities } from "./platform.js";
 
 const legacyKeys = ["feishuAppId", "feishuAppSecret", "feishuFolderToken", "feishuWikiSpaceId", "titlePrefix", "teamsAudioDevice", "teamsMicrophoneDevice"];
 
@@ -120,6 +121,7 @@ export function registerRoutes(app: Express) {
       workWindow: "08:00-18:00",
       timezone: settings.timezone,
       dataPath: dataDir,
+      capabilities: platformCapabilities(),
       lastRun: runs.at(-1) ?? null,
     });
   });

@@ -12,6 +12,7 @@ import { hasMeetingSignal, isMeetingTitle, isMeetingWindow, transcriptQuality } 
 import { redact } from "./redact.js";
 import { meetingTitle } from "./titles.js";
 import type { MeetingRecord, Settings } from "./types.js";
+import { worklogPlatform } from "./platform.js";
 
 const exec = promisify(execFile);
 const meetingsFile = join(dataDir, "meetings.json");
@@ -23,6 +24,8 @@ type AudioStatus = {
 };
 
 type RuntimeStatus = {
+  supported: boolean;
+  platform: string;
   monitoring: boolean;
   teamsInstalled: boolean;
   meetingWindowDetected: boolean;
@@ -43,6 +46,8 @@ let startSignals = 0;
 let missingMeetingWindows = 0;
 let meetingWindowSeen = false;
 let lastStatus: RuntimeStatus = {
+  supported: worklogPlatform() === "macos",
+  platform: worklogPlatform(),
   monitoring: false,
   teamsInstalled: false,
   meetingWindowDetected: false,
@@ -262,6 +267,7 @@ export async function retryTeamsMeeting(id: string) {
 }
 
 export async function startTeamsMeeting(origin: "automatic" | "manual" = "manual", requestedTitle?: string) {
+  if (worklogPlatform() !== "macos") throw new Error("Teams 系统音频记录目前仅支持 macOS；Windows/Linux 版本仍会记录 Agent、终端与前台应用活动。");
   if (current) throw new Error("已有一场 Teams 会议正在记录。");
   const settings = await getSettings(); const startedAt = new Date().toISOString();
   if (settings.capturePaused) throw new Error("采集已暂停，请先在 Worklog 页面恢复采集。");
@@ -301,6 +307,8 @@ async function poll() {
     const signals = { teamsCallActive: audio.teamsProcessAudioRunning, meetingWindow: meetingWindowDetected };
     const meetingSignal = running && hasMeetingSignal(signals);
     lastStatus = {
+      supported: true,
+      platform: "macos",
       monitoring: settings.teamsMeetingEnabled,
       teamsInstalled: running,
       meetingWindowDetected,
@@ -332,6 +340,7 @@ async function poll() {
 // 启动时清理进程重启遗留的非终态会议：录音无法恢复直接标记失败；
 // 转写/整理阶段若音频仍在则续跑，否则标记失败，避免记录永久卡住。
 export async function recoverMeetings() {
+  if (worklogPlatform() !== "macos") return;
   // 服务异常退出时清理遗留的系统音频与 WAV 封装进程。
   try { await exec("/usr/bin/pkill", ["-KILL", "-f", systemAudioCapture], { timeout: 3000 }); } catch { /* no stale capture */ }
   try { await exec("/usr/bin/pkill", ["-KILL", "-f", `${dataDir}/meetings/.*/audio\\.wav`], { timeout: 3000 }); } catch { /* no stale recorder */ }
@@ -357,6 +366,10 @@ export async function recoverMeetings() {
 
 export function startTeamsMonitor() {
   if (monitorTimer) clearInterval(monitorTimer);
+  if (worklogPlatform() !== "macos") {
+    lastStatus = { ...lastStatus, supported: false, platform: worklogPlatform(), monitoring: false, lastError: "当前平台暂不支持 Teams 系统音频采集。" };
+    return;
+  }
   lastStatus.monitoring = true;
   void recoverMeetings().catch(error => void logRun({ status: "failed", kind: "meeting", error: `恢复历史会议失败：${String(error)}` }));
   monitorTimer = setInterval(() => void poll(), 5000);

@@ -2,12 +2,13 @@ import { readdir, readFile, stat } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import { DatabaseSync } from "node:sqlite";
 import { join } from "node:path";
+import { homedir } from "node:os";
 import type { Activity, Settings } from "./types.js";
 import { redact } from "./redact.js";
 
 export { redact } from "./redact.js";
 
-const home = process.env.HOME || "/Users/mac";
+const home = homedir();
 
 // 从各 agent 日志提取真实用户提问时，剔除系统注入内容（环境上下文、命令回显、工具结果、元消息）与低信号短语。
 const STOP_PROMPTS = new Set(["继续", "ok", "好的", "嗯", "是的", "可以", "行", "对", "yes", "y", "go", "next", "对的", "嗯嗯"]);
@@ -124,7 +125,9 @@ function opencodeDetail(data: any) {
 }
 
 function opencodeActivities(date: string, settings: Settings): Activity[] {
-  const dbPath = join(home, ".local", "share", "opencode", "opencode.db");
+  const dbPath = process.platform === "win32"
+    ? join(process.env.APPDATA || join(home, "AppData", "Roaming"), "opencode", "opencode.db")
+    : join(process.env.XDG_DATA_HOME || join(home, ".local", "share"), "opencode", "opencode.db");
   if (!existsSync(dbPath)) return [];
   const db = new DatabaseSync(dbPath, { readOnly: true });
   const out: Activity[] = [];

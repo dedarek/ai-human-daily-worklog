@@ -26,6 +26,14 @@ async function loadMeetings() {
 
 async function loadMeetingStatus() {
   const status = await json("/api/meeting/status");
+  if (status.supported === false) {
+    $("#meetingStart").disabled = true;
+    $("#meetingStop").disabled = true;
+    $("#teamsStatus").innerHTML = `<b>当前平台暂不支持 Teams 系统音频</b><small>Agent 日志、终端、前台应用和自动报告不受影响</small>`;
+    $("#teamsHelp").textContent = "Windows/Linux 预览版暂不采集会议音频；该能力不会生成空会议或影响其他工作记录。";
+    $("#teamsSection").querySelectorAll("input, details").forEach(element => element.disabled = true);
+    return status;
+  }
   const recording = status.current?.status === "recording";
   $("#meetingStart").disabled = recording;
   $("#meetingStop").disabled = !recording;

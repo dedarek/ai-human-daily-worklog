@@ -11,9 +11,15 @@ const stateText = (element, ok, yes, no) => { element.textContent = ok ? yes : n
 
 async function refresh() {
   const [status, settings] = await Promise.all([json("/api/onboarding/status"), json("/api/settings")]);
-  stateText($("#screenState"), status.permissions.screenCapture, "已允许", "等待系统授权");
-  stateText($("#accessibilityState"), status.permissions.accessibility, "已允许", "等待系统授权");
+  const platformName = ({ macos: "macOS", windows: "Windows", linux: "Linux" })[status.platform] || status.platform;
+  $("#platformIntro").textContent = `正在配置 ${platformName} 版本。所有采集记录只保存在这台电脑。`;
+  $("#permissionHelp").textContent = status.permissions.required
+    ? "系统音频用于 Teams 会议；辅助功能用于识别前台应用和会议窗口。Worklog 不读取麦克风、键盘或屏幕画面。"
+    : "当前平台无需 macOS 辅助功能权限；Worklog 读取前台应用和窗口名称，但不读取键盘、剪贴板或页面正文。";
+  stateText($("#screenState"), status.permissions.screenCapture, status.permissions.required ? "已允许" : "当前平台无需授权", "等待系统授权");
+  stateText($("#accessibilityState"), status.permissions.accessibility, status.permissions.required ? "已允许" : "当前平台无需授权", "等待系统授权");
   document.querySelectorAll("[data-permission]").forEach(button => button.disabled = status.permissions[button.dataset.permission === "screen" ? "screenCapture" : "accessibility"]);
+  document.querySelectorAll("[data-permission]").forEach(button => button.classList.toggle("hidden", !status.permissions.required));
 
   const larkVerified = status.lark?.verified === true && status.lark?.identity === "user";
   $("#larkReady").classList.toggle("hidden", !larkVerified);
@@ -27,6 +33,7 @@ async function refresh() {
   if (!$("#llmModel").value) $("#llmModel").value = settings.llmModel || "";
 
   const model = status.whisper.model; const download = status.whisper.download;
+  $("#whisperCard").classList.toggle("hidden", !status.whisper.required);
   const percent = download.total ? Math.min(100, Math.round(download.received / download.total * 100)) : 0;
   $("#modelProgress").style.width = `${model.verified ? 100 : percent}%`;
   $("#downloadModel").disabled = model.verified || download.status === "downloading";
@@ -37,7 +44,7 @@ async function refresh() {
     [larkVerified, "飞书用户授权"],
     [status.llmConfigured, "LLM 配置"],
     [status.wikiConfigured, "知识库位置"],
-    [model.verified && status.whisper.cliInstalled, "本地会议转写"],
+    [!status.whisper.required || (model.verified && status.whisper.cliInstalled), status.whisper.required ? "本地会议转写" : "跨平台核心采集"],
   ];
   $("#summary").innerHTML = checks.map(([ok, label]) => `<span class="${ok ? "ok" : "warn"}">${ok ? "✓" : "○"} ${label}</span>`).join("　");
   $("#finishSetup").disabled = !status.complete;
@@ -47,7 +54,7 @@ async function refresh() {
 }
 
 document.querySelectorAll("[data-permission]").forEach(button => button.addEventListener("click", async () => {
-  try { notice("请在 macOS 系统窗口中允许权限…"); await post(`/api/onboarding/permission/${button.dataset.permission}`); await refresh(); }
+  try { notice("请在系统窗口中允许权限…"); await post(`/api/onboarding/permission/${button.dataset.permission}`); await refresh(); }
   catch (error) { notice(error.message); }
 }));
 
