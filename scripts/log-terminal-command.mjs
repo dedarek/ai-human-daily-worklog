@@ -4,7 +4,11 @@ import { fileURLToPath } from "node:url";
 import { homedir } from "node:os";
 
 const root = dirname(dirname(fileURLToPath(import.meta.url)));
-const baseDir = process.env.WORKLOG_DATA_DIR || join(homedir(), "Library", "Application Support", "Worklog");
+const baseDir = process.env.WORKLOG_DATA_DIR || (process.platform === "darwin"
+  ? join(homedir(), "Library", "Application Support", "Worklog")
+  : process.platform === "win32"
+    ? join(process.env.APPDATA || join(homedir(), "AppData", "Roaming"), "Worklog")
+    : join(process.env.XDG_DATA_HOME || join(homedir(), ".local", "share"), "worklog"));
 const dataDir = join(baseDir, "operations");
 const [cwd = "", original = ""] = process.argv.slice(2);
 let settings = {};

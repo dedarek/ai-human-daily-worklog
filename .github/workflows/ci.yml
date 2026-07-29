@@ -6,7 +6,12 @@ on:
 
 jobs:
   typecheck:
-    runs-on: ubuntu-latest
+    name: core (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-15, ubuntu-24.04, windows-2025]
+    runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v7
@@ -16,3 +21,5 @@ jobs:
       - run: npm ci
       - run: npm run check
       - run: npm test
+      - run: npm run smoke
+      - run: npm run smoke:credentials

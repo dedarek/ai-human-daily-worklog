@@ -2,12 +2,13 @@ import { existsSync } from "node:fs";
 import { readdir } from "node:fs/promises";
 import { spawn } from "node:child_process";
 import { join } from "node:path";
+import { homedir } from "node:os";
 import type { Settings } from "./types.js";
 
 type RunOptions = { input?: string; allowNonEnvelope?: boolean; timeoutMs?: number };
 
 async function nvmCandidates() {
-  const root = join(process.env.HOME ?? "", ".nvm", "versions", "node");
+  const root = join(homedir(), ".nvm", "versions", "node");
   try {
     const versions = await readdir(root);
     return versions.sort().reverse().map(version => join(root, version, "bin", "lark-cli"));
@@ -15,7 +16,9 @@ async function nvmCandidates() {
 }
 
 export async function findLarkCli(configured?: string) {
-  const candidates = [configured, process.env.LARK_CLI_PATH, process.env.WORKLOG_BUNDLED_LARK_CLI, "/opt/homebrew/bin/lark-cli", "/usr/local/bin/lark-cli", ...(await nvmCandidates())].filter(Boolean) as string[];
+  const executable = process.platform === "win32" ? "lark-cli.cmd" : "lark-cli";
+  const appDataCli = process.platform === "win32" && process.env.APPDATA ? join(process.env.APPDATA, "npm", executable) : "";
+  const candidates = [configured, process.env.LARK_CLI_PATH, process.env.WORKLOG_BUNDLED_LARK_CLI, appDataCli, "/opt/homebrew/bin/lark-cli", "/usr/local/bin/lark-cli", ...(await nvmCandidates())].filter(Boolean) as string[];
   const found = candidates.find(candidate => existsSync(candidate));
   if (!found) throw new Error("未找到飞书 CLI。请先运行：npm install -g @larksuite/cli");
   return found;
@@ -24,9 +27,11 @@ export async function findLarkCli(configured?: string) {
 export async function runLarkCli(settings: Pick<Settings, "larkCliPath">, args: string[], options: RunOptions = {}) {
   const binary = await findLarkCli(settings.larkCliPath);
   const result = await new Promise<{ code: number; stdout: string; stderr: string }>((resolve, reject) => {
-    const child = spawn(process.execPath, [binary, ...args], {
-      env: { ...process.env, LARKSUITE_CLI_NO_UPDATE_NOTIFIER: "1", LARKSUITE_CLI_NO_SKILLS_NOTIFIER: "1" },
+    const direct = process.platform === "win32" && /\.(?:cmd|exe)$/i.test(binary);
+    const child = spawn(direct ? binary : process.execPath, direct ? args : [binary, ...args], {
+      env: { ...process.env, ELECTRON_RUN_AS_NODE: "1", LARKSUITE_CLI_NO_UPDATE_NOTIFIER: "1", LARKSUITE_CLI_NO_SKILLS_NOTIFIER: "1" },
       detached: true,
+      shell: direct && binary.toLowerCase().endsWith(".cmd"),
       stdio: ["pipe", "pipe", "pipe"],
     });
     let stdout = "", stderr = "";

@@ -3,56 +3,78 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="theme-color" content="#20231f" />
   <title>开始使用 Worklog</title>
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
   <link rel="stylesheet" href="/setup.css" />
 </head>
 <body>
-  <main>
-    <header>
-      <div class="mark">W</div>
-      <div><p class="eyebrow">WELCOME TO WORKLOG</p><h1>把第一次配置，一次做完。</h1><p>四步完成本地采集、飞书、模型和会议转写。配置只保存在这台 Mac。</p></div>
-    </header>
-
-    <nav id="progress"><span class="active">1 权限</span><span>2 飞书</span><span>3 模型与归档</span><span>4 完成</span></nav>
-    <p id="notice" role="status"></p>
-
-    <section id="permissions">
-      <div class="step"><b>01</b><div><h2>允许 Worklog 读取工作上下文</h2><p>系统音频用于 Teams 会议；辅助功能用于识别前台应用和会议窗口。Worklog 不读取麦克风、键盘或屏幕画面。</p></div></div>
-      <div class="checks">
-        <article><div><h3>屏幕与系统音频录制</h3><p id="screenState">正在检查…</p></div><button data-permission="screen">授予权限</button></article>
-        <article><div><h3>辅助功能</h3><p id="accessibilityState">正在检查…</p></div><button data-permission="accessibility">授予权限</button></article>
+  <main class="onboarding-shell">
+    <aside class="intro-panel">
+      <a class="brand" href="/" aria-label="Worklog">
+        <svg class="brand-mark" viewBox="0 0 48 48" aria-hidden="true"><rect x="7" y="5" width="34" height="38" rx="3"/><path d="M16 5v38M22 16h12M22 23h10M22 30h7"/><circle cx="16" cy="16" r="2.5"/><circle cx="16" cy="30" r="2.5"/></svg>
+        <span><strong>Worklog</strong><small>LOCAL WORK ARCHIVE</small></span>
+      </a>
+      <div class="intro-copy">
+        <p class="eyebrow">FIRST RUN · FOUR STEPS</p>
+        <h1>让今天做过的事，<em>有据可查。</em></h1>
+        <p id="platformIntro">四步完成本地采集、飞书、模型和可用的会议能力。配置只保存在这台电脑。</p>
       </div>
-    </section>
+      <nav id="progress" aria-label="初始化进度">
+        <span class="active"><i>01</i><b>工作权限</b><small>读取必要的上下文</small></span>
+        <span><i>02</i><b>飞书身份</b><small>连接你的知识库</small></span>
+        <span><i>03</i><b>模型与归档</b><small>选择理解和存放方式</small></span>
+        <span><i>04</i><b>开始记录</b><small>检查后进入工作台</small></span>
+      </nav>
+      <div class="privacy-seal"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 10V7a5 5 0 0 1 10 0v3M5 10h14v11H5z"/><circle cx="12" cy="15" r="1"/></svg><span><b>Local-first by design</b><small>原始操作记录、会议音频和密钥不经过 Worklog 云端。</small></span></div>
+    </aside>
 
-    <section id="lark">
-      <div class="step"><b>02</b><div><h2>连接你的飞书身份</h2><p>使用官方飞书 CLI，以你的用户身份写入知识库。App Secret 直接交给飞书 CLI，并由其安全存储。</p></div></div>
-      <div id="larkReady" class="success hidden"></div>
-      <div id="larkForm" class="form-grid">
-        <label>飞书 App ID<input id="larkAppId" placeholder="cli_xxxxxxxxx" autocomplete="off" /></label>
-        <label>飞书 App Secret<input id="larkAppSecret" type="password" placeholder="仅用于初始化飞书 CLI" autocomplete="new-password" /></label>
-        <div class="wide actions"><button id="configureLark">保存应用凭据</button><button id="loginLark" class="secondary">打开飞书授权</button></div>
-      </div>
-      <p class="footnote">需要在飞书开放平台创建自建应用，并开通 Wiki 与新版文档读写权限。</p>
-    </section>
+    <div class="setup-canvas">
+      <header class="mobile-head">
+        <p class="eyebrow">WELCOME TO WORKLOG</p><h1>建立你的工作档案</h1>
+      </header>
+      <div id="notice" class="notice" role="status" aria-live="polite"></div>
 
-    <section id="configuration">
-      <div class="step"><b>03</b><div><h2>选择模型与归档位置</h2><p>支持 OpenAI 与 Anthropic 兼容接口。API Key 保存到 macOS Keychain，不写入配置文件。</p></div></div>
-      <div class="form-grid">
-        <label>接口协议<select id="llmProtocol"><option value="openai">OpenAI 兼容</option><option value="anthropic">Anthropic 兼容</option></select></label>
-        <label>模型<input id="llmModel" placeholder="gpt-4.1-mini" /></label>
-        <label class="wide">API 地址<input id="llmBaseUrl" placeholder="https://api.openai.com/v1" /></label>
-        <label class="wide">API Key<input id="llmApiKey" type="password" placeholder="保存在 macOS Keychain" autocomplete="new-password" /></label>
-        <label class="wide">飞书知识库父页面<input id="wikiUrl" placeholder="https://example.feishu.cn/wiki/..." /></label>
-        <div class="wide actions"><button id="saveConfiguration">保存并绑定知识库</button></div>
-      </div>
-      <div class="model-card"><div><h3>本地 Whisper Small 模型</h3><p id="modelState">正在检查…</p><div class="bar"><i id="modelProgress"></i></div></div><button id="downloadModel">下载并校验 · 465 MB</button></div>
-    </section>
+      <section id="permissions" class="setup-step">
+        <div class="step-heading"><span>01</span><div><p class="eyebrow">CONTEXT ACCESS</p><h2>允许 Worklog 读取工作上下文</h2><p id="permissionHelp">Worklog 只读取前台应用和窗口名称，不读取键盘、剪贴板或页面正文。</p></div></div>
+        <div class="checks">
+          <article><div class="check-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="13" rx="1"/><path d="M8 21h8m-4-4v4"/></svg></div><div><h3>屏幕与系统音频</h3><p id="screenState">正在检查…</p></div><button data-permission="screen">授予权限</button></article>
+          <article><div class="check-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="3"/><path d="M4 21c1-5 3.5-7 8-7s7 2 8 7M5 4h2M17 4h2"/></svg></div><div><h3>辅助功能</h3><p id="accessibilityState">正在检查…</p></div><button data-permission="accessibility">授予权限</button></article>
+        </div>
+      </section>
 
-    <section id="finish">
-      <div class="step"><b>04</b><div><h2>开始建立你的工作档案</h2><p>Worklog 登录后自动运行。你可以随时从菜单栏暂停采集、生成日报，或打开今天的飞书文档。</p></div></div>
-      <div class="summary" id="summary">正在汇总配置状态…</div>
-      <div class="actions"><button id="finishSetup">进入 Worklog</button><button id="refresh" class="secondary">重新检查</button></div>
-    </section>
+      <section id="lark" class="setup-step">
+        <div class="step-heading"><span>02</span><div><p class="eyebrow">YOUR IDENTITY</p><h2>连接你的飞书身份</h2><p>使用官方飞书 CLI，以你的用户身份写入知识库。应用凭据交给飞书 CLI 安全存储。</p></div></div>
+        <div id="larkReady" class="success hidden"></div>
+        <div id="larkForm" class="form-grid">
+          <label>飞书 App ID<input id="larkAppId" placeholder="cli_xxxxxxxxx" autocomplete="off" /></label>
+          <label>飞书 App Secret<input id="larkAppSecret" type="password" placeholder="仅用于初始化飞书 CLI" autocomplete="new-password" /></label>
+          <div class="wide actions"><button id="configureLark">保存应用凭据</button><button id="loginLark" class="secondary">打开飞书授权</button></div>
+        </div>
+        <p class="footnote"><span>提示</span>需要在飞书开放平台创建自建应用，并开通 Wiki 与新版文档读写权限。</p>
+      </section>
+
+      <section id="configuration" class="setup-step">
+        <div class="step-heading"><span>03</span><div><p class="eyebrow">MODEL & DESTINATION</p><h2>选择模型与归档位置</h2><p>支持 OpenAI 与 Anthropic 兼容接口。API Key 只保存在当前系统用户的本地凭据空间。</p></div></div>
+        <div class="form-grid">
+          <label>接口协议<select id="llmProtocol"><option value="openai">OpenAI 兼容</option><option value="anthropic">Anthropic 兼容</option></select></label>
+          <label>模型<input id="llmModel" placeholder="gpt-4.1-mini" /></label>
+          <label class="wide">API 地址<input id="llmBaseUrl" placeholder="https://api.openai.com/v1" /></label>
+          <label class="wide">API Key<input id="llmApiKey" type="password" placeholder="仅保存在这台电脑" autocomplete="new-password" /></label>
+          <label class="wide">飞书知识库父页面<input id="wikiUrl" placeholder="https://example.feishu.cn/wiki/..." /></label>
+          <div class="wide actions"><button id="saveConfiguration">保存并验证知识库</button></div>
+        </div>
+        <div class="model-card" id="whisperCard"><div class="model-symbol"><span>W</span></div><div><h3>本地 Whisper Small 模型</h3><p id="modelState">正在检查…</p><div class="bar"><i id="modelProgress"></i></div></div><button id="downloadModel" class="secondary">下载并校验 · 465 MB</button></div>
+      </section>
+
+      <section id="finish" class="setup-step finish-step">
+        <div class="step-heading"><span>04</span><div><p class="eyebrow">READY TO RECORD</p><h2>开始建立你的工作档案</h2><p>登录后自动运行。你可以随时从菜单栏暂停采集、生成日报，或打开今天的飞书文档。</p></div></div>
+        <div class="summary" id="summary">正在汇总配置状态…</div>
+        <div class="actions"><button id="finishSetup" class="finish-button">进入 Worklog</button><button id="refresh" class="secondary">重新检查</button></div>
+      </section>
+
+      <footer><span>WORKLOG SETUP</span><span>所有设置稍后都可以在工作台中修改。</span></footer>
+    </div>
   </main>
   <script src="/setup.js"></script>
 </body>

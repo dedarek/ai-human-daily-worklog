@@ -5,10 +5,11 @@
 import { DatabaseSync } from "node:sqlite";
 import { existsSync } from "node:fs";
 import { join } from "node:path";
+import { homedir } from "node:os";
 import type { Activity, Settings } from "./types.js";
 import { redact, cleanPrompt, localDate } from "./agentLogs.js";
 
-const home = process.env.HOME || "/Users/mac";
+const home = homedir();
 
 function openReadonly(path: string): InstanceType<typeof DatabaseSync> | null {
   if (!existsSync(path)) return null;

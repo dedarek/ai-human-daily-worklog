@@ -1,105 +1,48 @@
 <svg width="1200" height="720" viewBox="0 0 1200 720" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <defs>
-    <linearGradient id="canvas" x1="0" y1="0" x2="1200" y2="720" gradientUnits="userSpaceOnUse">
-      <stop stop-color="#EAE7DF"/>
-      <stop offset="1" stop-color="#F7F5F0"/>
-    </linearGradient>
-    <filter id="panelShadow" x="-20%" y="-20%" width="140%" height="160%">
-      <feDropShadow dx="0" dy="16" stdDeviation="24" flood-color="#435145" flood-opacity="0.12"/>
-    </filter>
-  </defs>
+  <rect width="1200" height="720" rx="18" fill="#DCD5C9"/>
+  <rect x="24" y="22" width="1152" height="676" fill="#F3EFE6" stroke="#BFB6A7"/>
+  <rect x="24" y="22" width="246" height="676" fill="#20231F"/>
+  <g transform="translate(52 51)">
+    <rect width="34" height="39" fill="#EEE8DC"/><rect width="9" height="39" fill="#D4CCBE"/><path d="M9 0V39M16 13H28M16 20H26M16 27H24" stroke="#20231F" stroke-width="1.8"/><circle cx="9" cy="13" r="2.4" fill="#C64F37"/><circle cx="9" cy="27" r="2.4" fill="#C64F37"/>
+    <text x="47" y="25" fill="#F4EEE3" font-family="Georgia, serif" font-size="21" font-weight="600">Worklog</text><text x="48" y="39" fill="#81887E" font-family="Menlo, monospace" font-size="6" letter-spacing="1">个人工作档案</text>
+  </g>
+  <g font-family="-apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" font-size="10">
+    <rect x="42" y="132" width="210" height="42" fill="#2C302A"/><rect x="42" y="132" width="3" height="42" fill="#C64F37"/><text x="62" y="158" fill="#F7F1E7">01　今日现场</text>
+    <text x="62" y="205" fill="#A2A9A0">02　日报校正</text><text x="62" y="247" fill="#A2A9A0">03　工作档案</text><text x="62" y="289" fill="#A2A9A0">04　采集来源</text><text x="62" y="331" fill="#A2A9A0">05　系统设置</text>
+  </g>
+  <line x1="45" y1="558" x2="249" y2="558" stroke="#3B4038"/><circle cx="53" cy="583" r="4" fill="#89A17B"/><text x="66" y="587" fill="#E9E3D8" font-family="-apple-system, sans-serif" font-size="9" font-weight="600">配置完整，后台正在运行</text><text x="66" y="604" fill="#7F867D" font-family="-apple-system, sans-serif" font-size="7">08:30 续接 · 18:00 日报</text>
+  <rect x="44" y="626" width="207" height="40" fill="#C64F37"/><text x="79" y="651" fill="white" font-family="-apple-system, sans-serif" font-size="9" font-weight="700">生成并发布今日档案</text>
 
-  <rect width="1200" height="720" rx="26" fill="url(#canvas)"/>
-  <rect x="32" y="28" width="1136" height="664" rx="20" fill="#FFFEFA" stroke="#D7D6CF" filter="url(#panelShadow)"/>
+  <g transform="translate(306 58)">
+    <text x="0" y="12" fill="#A14230" font-family="Menlo, monospace" font-size="7" letter-spacing="1.2">TODAY'S FIELD NOTES · JUL 30, 2026</text>
+    <text x="0" y="59" fill="#20231F" font-family="Georgia, serif" font-size="39" font-weight="600">今天的工作现场</text>
+    <text x="0" y="84" fill="#6F746C" font-family="-apple-system, sans-serif" font-size="10">先看项目如何推进，再把零散证据整理成一份可信、可继续的工作档案。</text>
+    <rect x="779" y="0" width="65" height="76" fill="#FBF9F3" stroke="#BCB3A4"/><text x="796" y="34" fill="#20231F" font-family="Georgia, serif" font-size="27" font-weight="600">30</text><text x="793" y="49" fill="#A14230" font-family="Menlo, monospace" font-size="6" font-weight="700">JUL 2026</text><text x="796" y="63" fill="#777B72" font-family="-apple-system, sans-serif" font-size="7">星期四</text>
+    <line x1="0" y1="106" x2="844" y2="106" stroke="#D8D1C4"/>
 
-  <g font-family="-apple-system, BlinkMacSystemFont, Segoe UI, sans-serif">
-    <rect x="32" y="28" width="1136" height="72" rx="20" fill="#F8F7F2"/>
-    <rect x="32" y="80" width="1136" height="20" fill="#F8F7F2"/>
-    <circle cx="64" cy="63" r="14" fill="#315C39"/>
-    <path d="M57 56.5L61.6 69L65 61L68.4 69L73 56.5" stroke="#EAF1E8" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/>
-    <text x="88" y="70" fill="#182019" font-size="22" font-weight="720">Worklog</text>
-    <text x="1034" y="68" fill="#49604D" font-size="12" font-weight="650">LOCAL · PRIVATE</text>
-
-    <rect x="60" y="126" width="1080" height="64" rx="12" fill="#E8F0E5" stroke="#CBDCC7"/>
-    <circle cx="87" cy="158" r="6" fill="#3D8243"/>
-    <text x="105" y="153" fill="#27452C" font-size="15" font-weight="700">配置完整，后台正在运行</text>
-    <text x="105" y="173" fill="#637065" font-size="12">工作日 18:00 生成日报 · 周一生成周报 · 每月 1 日生成月报</text>
-    <rect x="1004" y="143" width="108" height="30" rx="8" fill="#315C39"/>
-    <text x="1027" y="163" fill="#FFFFFF" font-size="12" font-weight="650">立即生成</text>
-
-    <g transform="translate(60 216)">
-      <rect width="330" height="210" rx="14" fill="#FFFEFA" stroke="#D8D7D0"/>
-      <text x="22" y="34" fill="#1D271F" font-size="16" font-weight="700">自动生成计划</text>
-      <text x="22" y="66" fill="#6A746B" font-size="11">工作日日报</text>
-      <rect x="22" y="76" width="286" height="34" rx="7" fill="#F7F7F3" stroke="#D5D7D0"/>
-      <text x="36" y="98" fill="#425045" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="12">0 18 * * 1-5</text>
-      <text x="22" y="136" fill="#6A746B" font-size="11">归档层级</text>
-      <rect x="22" y="147" width="286" height="40" rx="8" fill="#EEF3EB"/>
-      <text x="36" y="172" fill="#315C39" font-size="12" font-weight="650">月份  →  周  →  日</text>
+    <g transform="translate(0 129)">
+      <rect width="844" height="79" fill="#FBF9F3" stroke="#D8D1C4"/>
+      <line x1="211" y1="0" x2="211" y2="79" stroke="#D8D1C4"/><line x1="422" y1="0" x2="422" y2="79" stroke="#D8D1C4"/><line x1="633" y1="0" x2="633" y2="79" stroke="#D8D1C4"/>
+      <g fill="#777B72" font-family="-apple-system, sans-serif" font-size="8"><text x="20" y="22">有效证据</text><text x="231" y="22">活跃项目</text><text x="442" y="22">可确认产物</text><text x="653" y="22">日报状态</text></g>
+      <g fill="#20231F" font-family="Georgia, serif" font-size="26" font-weight="600"><text x="20" y="53">128</text><text x="231" y="53">4</text><text x="442" y="53">11</text><text x="653" y="53">草稿 v2</text></g>
+      <g fill="#999B92" font-family="-apple-system, sans-serif" font-size="7"><text x="20" y="68">已过滤工作素材</text><text x="231" y="68">按上下文自动归类</text><text x="442" y="68">提交、文档与决策</text><text x="653" y="68">18:00 自动整理</text></g>
     </g>
 
-    <g transform="translate(414 216)">
-      <rect width="330" height="210" rx="14" fill="#FFFEFA" stroke="#D8D7D0"/>
-      <text x="22" y="34" fill="#1D271F" font-size="16" font-weight="700">隐私与采集</text>
-      <rect x="22" y="59" width="286" height="45" rx="9" fill="#F5F5F0"/>
-      <circle cx="43" cy="81" r="9" fill="#3D8243"/>
-      <path d="M39 81L42 84L47 77.5" stroke="#FFFFFF" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
-      <text x="61" y="85" fill="#38443A" font-size="12">敏感信息过滤已开启</text>
-      <rect x="22" y="116" width="137" height="44" rx="9" fill="#EEF3EB"/>
-      <text x="38" y="143" fill="#315C39" font-size="12" font-weight="650">查看今日证据</text>
-      <rect x="171" y="116" width="137" height="44" rx="9" fill="#F2E7E4"/>
-      <text x="195" y="143" fill="#843E36" font-size="12" font-weight="650">暂停所有采集</text>
-      <text x="22" y="187" fill="#7B847C" font-size="11">密钥保存在 macOS Keychain</text>
+    <g transform="translate(0 232)">
+      <rect width="844" height="130" fill="#FBF9F3" stroke="#D8D1C4"/>
+      <rect x="20" y="20" width="27" height="27" fill="#F3EFE6" stroke="#BCB3A4"/><text x="29" y="38" fill="#A14230" font-family="Menlo, monospace" font-size="9" font-weight="700">A</text>
+      <text x="62" y="28" fill="#A14230" font-family="Menlo, monospace" font-size="6" letter-spacing="1">08:30 · CONTINUE</text><text x="62" y="49" fill="#20231F" font-family="Georgia, serif" font-size="17" font-weight="600">晨间续接</text><text x="62" y="65" fill="#777B72" font-family="-apple-system, sans-serif" font-size="7">从昨天停下的地方继续，不必重新翻找上下文。</text>
+      <line x1="20" y1="83" x2="824" y2="83" stroke="#D8D1C4"/><text x="30" y="107" fill="#4F554E" font-family="-apple-system, sans-serif" font-size="8">继续完成桌面端发布体验：先验证新图标与安装向导，再处理公开文档中的跨平台说明。</text>
     </g>
 
-    <g transform="translate(768 216)">
-      <rect width="372" height="210" rx="14" fill="#FFFEFA" stroke="#D8D7D0"/>
-      <text x="22" y="34" fill="#1D271F" font-size="16" font-weight="700">连接状态</text>
-      <circle cx="31" cy="67" r="5" fill="#3D8243"/>
-      <text x="46" y="71" fill="#38443A" font-size="12" font-weight="650">LLM</text>
-      <text x="258" y="71" fill="#667268" font-size="11">OpenAI 兼容</text>
-      <line x1="22" y1="88" x2="350" y2="88" stroke="#ECECE6"/>
-      <circle cx="31" cy="111" r="5" fill="#3D8243"/>
-      <text x="46" y="115" fill="#38443A" font-size="12" font-weight="650">飞书知识库</text>
-      <text x="294" y="115" fill="#667268" font-size="11">已连接</text>
-      <line x1="22" y1="132" x2="350" y2="132" stroke="#ECECE6"/>
-      <circle cx="31" cy="155" r="5" fill="#3D8243"/>
-      <text x="46" y="159" fill="#38443A" font-size="12" font-weight="650">Teams 系统音频</text>
-      <text x="294" y="159" fill="#667268" font-size="11">已就绪</text>
-      <text x="22" y="190" fill="#7B847C" font-size="11">原始音频与逐字稿保留在本机</text>
-    </g>
-
-    <g transform="translate(60 450)">
-      <rect width="684" height="212" rx="14" fill="#FFFEFA" stroke="#D8D7D0"/>
-      <text x="22" y="34" fill="#1D271F" font-size="16" font-weight="700">今天采集了什么</text>
-      <text x="574" y="34" fill="#315C39" font-size="11" font-weight="650">查看全部 128 条</text>
-      <rect x="22" y="52" width="640" height="34" rx="8" fill="#F0F4ED"/>
-      <text x="36" y="73" fill="#536255" font-size="11">Codex 48 · Claude Code 31 · OpenCode 22 · Terminal 17 · Teams 10</text>
-      <text x="24" y="111" fill="#778078" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11">17:24</text>
-      <text x="78" y="111" fill="#315C39" font-size="11" font-weight="700">Codex</text>
-      <text x="156" y="111" fill="#4E584F" font-size="11">完成发布流程并验证 GitHub 检查</text>
-      <line x1="22" y1="126" x2="662" y2="126" stroke="#ECECE6"/>
-      <text x="24" y="151" fill="#778078" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11">15:10</text>
-      <text x="78" y="151" fill="#315C39" font-size="11" font-weight="700">Teams</text>
-      <text x="156" y="151" fill="#4E584F" font-size="11">明确新版本交付范围与负责人</text>
-      <line x1="22" y1="166" x2="662" y2="166" stroke="#ECECE6"/>
-      <text x="24" y="191" fill="#778078" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11">11:42</text>
-      <text x="78" y="191" fill="#315C39" font-size="11" font-weight="700">Terminal</text>
-      <text x="156" y="191" fill="#4E584F" font-size="11">构建并验证 macOS 本地采集组件</text>
-    </g>
-
-    <g transform="translate(768 450)">
-      <rect width="372" height="212" rx="14" fill="#FFFEFA" stroke="#D8D7D0"/>
-      <text x="22" y="34" fill="#1D271F" font-size="16" font-weight="700">最近生成</text>
-      <rect x="22" y="54" width="328" height="48" rx="9" fill="#F5F5F0"/>
-      <circle cx="42" cy="78" r="5" fill="#3D8243"/>
-      <text x="56" y="75" fill="#354238" font-size="12" font-weight="650">今天的工作日志</text>
-      <text x="56" y="91" fill="#7A847B" font-size="10">已写入飞书与本地 Markdown</text>
-      <rect x="22" y="112" width="328" height="48" rx="9" fill="#F5F5F0"/>
-      <circle cx="42" cy="136" r="5" fill="#3D8243"/>
-      <text x="56" y="133" fill="#354238" font-size="12" font-weight="650">上周工作周报</text>
-      <text x="56" y="149" fill="#7A847B" font-size="10">已按月份 → 周归档</text>
-      <text x="22" y="190" fill="#315C39" font-size="11" font-weight="650">打开飞书工作档案  ↗</text>
+    <g transform="translate(0 383)">
+      <rect width="844" height="225" fill="#FBF9F3" stroke="#D8D1C4"/>
+      <rect x="20" y="20" width="27" height="27" fill="#F3EFE6" stroke="#BCB3A4"/><text x="29" y="38" fill="#A14230" font-family="Menlo, monospace" font-size="9" font-weight="700">B</text>
+      <text x="62" y="28" fill="#A14230" font-family="Menlo, monospace" font-size="6" letter-spacing="1">TODAY · WORK GRAPH</text><text x="62" y="49" fill="#20231F" font-family="Georgia, serif" font-size="17" font-weight="600">项目与产出链</text><text x="755" y="42" fill="#A14230" font-family="-apple-system, sans-serif" font-size="8">刷新图谱</text>
+      <line x1="20" y1="78" x2="824" y2="78" stroke="#D8D1C4"/>
+      <text x="20" y="105" fill="#20231F" font-family="Georgia, serif" font-size="14" font-weight="600">Worklog · 桌面发布体验</text><text x="706" y="104" fill="#777B72" font-family="Menlo, monospace" font-size="7">47 条证据 · 6 个产物</text>
+      <rect x="20" y="121" width="388" height="79" fill="#FFFDF8" stroke="#D8D1C4"/><rect x="20" y="121" width="3" height="79" fill="#C64F37"/><text x="36" y="143" fill="#20231F" font-family="-apple-system, sans-serif" font-size="9" font-weight="600">重构首次启动与桌面视觉</text><rect x="330" y="135" width="61" height="17" fill="#E5EADF" stroke="#B9C5B1"/><text x="341" y="147" fill="#526644" font-family="Menlo, monospace" font-size="6">高可信 91%</text><text x="36" y="166" fill="#777B72" font-family="Menlo, monospace" font-size="7">意图  →  8 个执行节点  →  构建</text><text x="36" y="186" fill="#4F554E" font-family="-apple-system, sans-serif" font-size="7">完成管理台、初始化向导与品牌资产的统一重构。</text>
+      <rect x="424" y="121" width="400" height="79" fill="#FFFDF8" stroke="#D8D1C4"/><rect x="424" y="121" width="3" height="79" fill="#829677"/><text x="440" y="143" fill="#20231F" font-family="-apple-system, sans-serif" font-size="9" font-weight="600">验证跨平台安装包</text><rect x="746" y="135" width="61" height="17" fill="#E5EADF" stroke="#B9C5B1"/><text x="757" y="147" fill="#526644" font-family="Menlo, monospace" font-size="6">高可信 88%</text><text x="440" y="166" fill="#777B72" font-family="Menlo, monospace" font-size="7">意图  →  5 个执行节点  →  发布</text><text x="440" y="186" fill="#4F554E" font-family="-apple-system, sans-serif" font-size="7">macOS、Windows 与 Linux 构建检查全部通过。</text>
     </g>
   </g>
 </svg>

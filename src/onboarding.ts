@@ -9,6 +9,7 @@ import { promisify } from "node:util";
 import { execFile } from "node:child_process";
 import { dataDir, getSecrets, getSettings, saveSettings } from "./store.js";
 import { findLarkCli, getLarkStatus } from "./larkCli.js";
+import { platformCapabilities, worklogPlatform } from "./platform.js";
 
 const exec = promisify(execFile);
 const modelUrl = "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-small.bin";
@@ -33,9 +34,11 @@ async function jsonTool(path: string, args: string[]) {
 
 function runLark(binary: string, args: string[], input = "", timeoutMs = 30_000) {
   return new Promise<{ code: number; stdout: string; stderr: string }>((resolve, reject) => {
-    const child = spawn(process.execPath, [binary, ...args], {
-      env: { ...process.env, LARKSUITE_CLI_NO_UPDATE_NOTIFIER: "1", LARKSUITE_CLI_NO_SKILLS_NOTIFIER: "1" },
+    const direct = process.platform === "win32" && /\.(?:cmd|exe)$/i.test(binary);
+    const child = spawn(direct ? binary : process.execPath, direct ? args : [binary, ...args], {
+      env: { ...process.env, ELECTRON_RUN_AS_NODE: "1", LARKSUITE_CLI_NO_UPDATE_NOTIFIER: "1", LARKSUITE_CLI_NO_SKILLS_NOTIFIER: "1" },
       detached: true,
+      shell: direct && binary.toLowerCase().endsWith(".cmd"),
       stdio: ["pipe", "pipe", "pipe"],
     });
     let stdout = "", stderr = "";
@@ -91,24 +94,29 @@ async function larkInfo(settings: Awaited<ReturnType<typeof getSettings>>) {
 
 export async function onboardingStatus() {
   const settings = await getSettings(); const secrets = await getSecrets();
-  const screen = await jsonTool(audioTool, ["--permission-status"]);
-  const accessibility = await jsonTool(permissionTool, []);
+  const capabilities = platformCapabilities();
+  const screen = capabilities.nativePermissions ? await jsonTool(audioTool, ["--permission-status"]) : { screenCapture: true };
+  const accessibility = capabilities.nativePermissions ? await jsonTool(permissionTool, []) : { accessibility: true };
   const lark = await larkInfo(settings);
   const bundledWhisper = process.env.WORKLOG_BUNDLED_WHISPER_CLI;
-  const whisperCli = [settings.whisperCliPath, bundledWhisper, "/opt/homebrew/bin/whisper-cli", "/usr/local/bin/whisper-cli"].find(value => value && existsSync(value));
+  const whisperCli = [settings.whisperCliPath, bundledWhisper, "/opt/homebrew/bin/whisper-cli", "/usr/local/bin/whisper-cli", join(dataDir, "bin", process.platform === "win32" ? "whisper-cli.exe" : "whisper-cli")].find(value => value && existsSync(value));
   const model = await modelInfo();
+  const meetingReady = !capabilities.teamsSystemAudio || Boolean(whisperCli && model.verified);
   return {
-    permissions: { screenCapture: screen.screenCapture === true, accessibility: accessibility.accessibility === true },
+    platform: worklogPlatform(),
+    capabilities,
+    permissions: { required: capabilities.nativePermissions, screenCapture: screen.screenCapture === true, accessibility: accessibility.accessibility === true },
     lark,
     larkLogin,
     llmConfigured: Boolean(secrets.llmApiKey && settings.llmBaseUrl && settings.llmModel),
     wikiConfigured: Boolean(settings.feishuWikiNodeToken),
-    whisper: { cliInstalled: Boolean(whisperCli), cliPath: whisperCli || "", model, download: downloadState },
-    complete: screen.screenCapture === true && accessibility.accessibility === true && (lark as any).verified === true && Boolean(secrets.llmApiKey && settings.feishuWikiNodeToken && whisperCli && model.verified),
+    whisper: { required: capabilities.teamsSystemAudio, cliInstalled: Boolean(whisperCli), cliPath: whisperCli || "", model, download: downloadState },
+    complete: screen.screenCapture === true && accessibility.accessibility === true && (lark as any).verified === true && Boolean(secrets.llmApiKey && settings.feishuWikiNodeToken && meetingReady),
   };
 }
 
 export async function requestPermission(kind: "screen" | "accessibility") {
+  if (worklogPlatform() !== "macos") return { granted: true, notRequired: true };
   return kind === "screen"
     ? jsonTool(audioTool, ["--request-permission"])
     : jsonTool(permissionTool, ["--request-accessibility"]);

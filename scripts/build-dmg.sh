@@ -28,7 +28,12 @@ rm -rf "$staging" "$DMG"
 mkdir -p "$staging"
 cp -R "$APP" "$staging/"
 ln -s /Applications "$staging/Applications"
-hdiutil create -volname "Worklog" -srcfolder "$staging" -ov -format UDZO "$DMG" >/dev/null
+for attempt in 1 2 3; do
+  if hdiutil create -volname "Worklog" -srcfolder "$staging" -ov -format UDZO "$DMG" >/dev/null; then break; fi
+  rm -f "$DMG"
+  [[ "$attempt" == 3 ]] && { echo "DMG creation failed after $attempt attempts" >&2; exit 1; }
+  sleep $((attempt * 3))
+done
 dmg_sign_args=(--force)
 if [[ "$IDENTITY" != "-" ]]; then dmg_sign_args+=(--timestamp); else dmg_sign_args+=(--timestamp=none); fi
 codesign "${dmg_sign_args[@]}" --sign "$IDENTITY" "$DMG"

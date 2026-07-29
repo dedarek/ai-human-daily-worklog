@@ -1,6 +1,12 @@
 <svg width="1024" height="1024" viewBox="0 0 1024 1024" xmlns="http://www.w3.org/2000/svg">
-  <defs><linearGradient id="g" x1="150" y1="100" x2="850" y2="920" gradientUnits="userSpaceOnUse"><stop stop-color="#6D7CF5"/><stop offset="1" stop-color="#45D4AE"/></linearGradient></defs>
-  <rect x="52" y="52" width="920" height="920" rx="224" fill="#0E162A"/>
-  <rect x="122" y="122" width="780" height="780" rx="188" fill="url(#g)"/>
-  <path d="M279 334L406 704L512 460L618 704L745 334" fill="none" stroke="#0E162A" stroke-width="86" stroke-linecap="round" stroke-linejoin="round"/>
+  <rect x="54" y="54" width="916" height="916" rx="212" fill="#20231F"/>
+  <path d="M272 186H724C760 186 790 216 790 252V812H272V186Z" fill="#F4EFE4"/>
+  <path d="M272 186H360V812H272V186Z" fill="#DED6C8"/>
+  <path d="M360 186V812" stroke="#AFA596" stroke-width="10"/>
+  <path d="M438 350H690M438 446H666M438 542H702M438 638H620" stroke="#3E433C" stroke-width="28" stroke-linecap="square"/>
+  <path d="M360 320H430M360 512H430M360 704H430" stroke="#C64F37" stroke-width="16"/>
+  <circle cx="360" cy="320" r="28" fill="#C64F37" stroke="#20231F" stroke-width="12"/>
+  <circle cx="360" cy="512" r="28" fill="#C64F37" stroke="#20231F" stroke-width="12"/>
+  <circle cx="360" cy="704" r="28" fill="#C64F37" stroke="#20231F" stroke-width="12"/>
+  <path d="M734 186H790V242L734 186Z" fill="#C64F37"/>
 </svg>

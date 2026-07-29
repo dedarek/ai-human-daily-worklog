@@ -2,29 +2,29 @@
 
 <img src="docs/assets/worklog-hero.svg" alt="Worklog — Your workday, remembered" width="100%" />
 
-<br />
+## 每个 App 都有 log。你的一天也应该有。
 
-## AI 时代，自动生成属于你自己的工作档案
-
-Worklog 在你的 Mac 上汇合 Agent、终端、应用与会议留下的工作证据，<br />
+Worklog 在你的电脑上汇合 Agent、终端、应用与会议留下的工作证据，<br />
 过滤无关噪声，生成日报、周报和月报，自动归档到飞书或本地 Markdown。
 
 <p>
-  <img alt="macOS 13+" src="https://img.shields.io/badge/macOS_13+-111827?style=flat-square&logo=apple&logoColor=white" />
-  <img alt="Local first" src="https://img.shields.io/badge/local--first-5B67F1?style=flat-square" />
-  <img alt="Teams" src="https://img.shields.io/badge/Teams_system_audio-6264A7?style=flat-square&logo=microsoftteams&logoColor=white" />
-  <img alt="Feishu CLI" src="https://img.shields.io/badge/Feishu_CLI-3370FF?style=flat-square" />
-  <img alt="Apache 2.0" src="https://img.shields.io/badge/license-Apache--2.0-5B67F1?style=flat-square" />
+  <img alt="macOS 13+" src="https://img.shields.io/badge/macOS_13+-20231F?style=flat-square&logo=apple&logoColor=white" />
+  <img alt="Windows 10+" src="https://img.shields.io/badge/Windows_10+-20231F?style=flat-square&logo=windows&logoColor=white" />
+  <img alt="Linux" src="https://img.shields.io/badge/Linux_desktop-20231F?style=flat-square&logo=linux&logoColor=white" />
+  <img alt="Local first" src="https://img.shields.io/badge/local--first-526644?style=flat-square" />
+  <img alt="Teams" src="https://img.shields.io/badge/Teams_system_audio-526644?style=flat-square&logo=microsoftteams&logoColor=white" />
+  <img alt="Feishu CLI" src="https://img.shields.io/badge/Feishu_CLI-C64F37?style=flat-square" />
+  <img alt="Apache 2.0" src="https://img.shields.io/badge/license-Apache--2.0-8D6A34?style=flat-square" />
   <img alt="CI" src="https://img.shields.io/github/actions/workflow/status/dedarek/ai-human-daily-worklog/ci.yml?branch=main&amp;style=flat-square&amp;label=build" />
   <img alt="GitHub stars" src="https://img.shields.io/github/stars/dedarek/ai-human-daily-worklog?style=flat-square" />
 </p>
 
-[产品预览](#产品预览) · [核心能力](#核心能力) · [快速开始](#快速开始) · [隐私边界](#隐私边界) · [Roadmap](#roadmap)
+[为什么需要它](#为什么需要它) · [产品预览](#产品预览) · [核心能力](#核心能力) · [平台能力](#平台能力) · [快速开始](#快速开始) · [Roadmap](#roadmap)
 
 </div>
 
 > [!NOTE]
-> Worklog 目前是面向 macOS 的公开预览版。v0.2 提供 Universal 菜单栏应用与首次启动向导；当前 GitHub 下载包未经过 Apple 公证，首次启动需要右键选择「打开」。
+> Worklog v0.3 是 macOS、Windows 与 Linux 的跨平台公开预览版。三端共享 Agent 采集、前台应用、自动报告、飞书归档与本地 Markdown；Teams 系统音频目前仅在 macOS 可用。
 
 ## 为什么需要它
 
@@ -44,27 +44,27 @@ Worklog 为此而生。它从电脑上已经存在的操作与 Agent 执行记�
 
 那些与工作无关的事情，不应该进入你的工作档案。
 
-## 一天，只留一份清楚的记录
+## 从工作证据，到长期档案
 
 <table>
 <tr>
 <td width="33%" valign="top">
 
-### 01 · 自动采集
+### 01 / 自动采集
 
-持续观察有效工作操作，读取受支持的 Agent 执行日志，并在 Teams 通话时采集系统声音。无需在每个任务结束后手动登记。
+持续观察有效工作操作，读取受支持的 Agent 执行日志；macOS 还可在 Teams 通话时采集系统声音。无需在每个任务结束后手动登记。
 
 </td>
 <td width="33%" valign="top">
 
-### 02 · 理解工作
+### 02 / 理解工作
 
 将分散的证据按项目与上下文重组。过滤设备事件、重复操作、静音、识别噪声和与工作无关的内容。
 
 </td>
 <td width="33%" valign="top">
 
-### 03 · 自动归档
+### 03 / 自动归档
 
 生成自然、可复盘的日报，并进一步汇总为周报与月报，按「月份 → 周 → 日」写入飞书知识库。
 
@@ -74,9 +74,9 @@ Worklog 为此而生。它从电脑上已经存在的操作与 Agent 执行记�
 
 ## 产品预览
 
-<img src="docs/assets/worklog-dashboard.svg" alt="Worklog 本地管理页面：运行状态、隐私控制、采集审计和最近生成结果" width="100%" />
+<img src="docs/assets/worklog-dashboard.svg" alt="Worklog 工作档案台：今日概览、项目与产出链、采集和发布状态" width="100%" />
 
-<p align="center"><sub>基于真实界面绘制的脱敏预览；不包含用户身份、工作内容、路径或模型凭据。</sub></p>
+<p align="center"><sub>工作证据 → 项目与产出 → 日报校正 → 长期归档。预览内容已脱敏。</sub></p>
 
 ## 它记录什么
 
@@ -84,7 +84,7 @@ Worklog 为此而生。它从电脑上已经存在的操作与 Agent 执行记�
 | --- | --- |
 | Claude Code、Codex 与 OpenCode 的任务、工具调用和文件操作 | 键盘输入与密码 |
 | 可确认的终端命令和前台应用上下文 | 剪贴板内容 |
-| Teams 中电脑实际播放的会议声音 | 麦克风音频 |
+| macOS 上 Teams 中电脑实际播放的会议声音 | 麦克风音频 |
 | 会议讨论、结论与待办 | 截图与屏幕画面 |
 | 生成报告所需的结构化工作证据 | 浏览器页面正文 |
 | 日报、周报和月报的本地副本 | 与工作无关的系统事件 |
@@ -99,15 +99,17 @@ flowchart LR
     B["终端与应用活动"] --> E
     C["Teams 系统音频"] --> D["本地 Whisper 转写"]
     D --> E
-    E --> F["过滤与上下文重组"]
-    F --> G["你配置的 LLM"]
-    G --> H["日报 · 周报 · 月报"]
-    H --> I["飞书知识库"]
+    E --> F["项目图谱与工作链"]
+    F --> G["产物识别与证据追溯"]
+    G --> H["你配置的 LLM"]
+    H --> I["预览 · 校正 · 发布"]
+    I --> J["飞书与本地档案"]
 ```
 
 <details>
 <summary><strong>默认自动运行时间</strong></summary>
 
+- 工作日 08:30：从最近档案生成晨间续接；
 - 工作日 18:00：覆盖生成当天 08:00–18:00 的日报；
 - 周一 08:00：汇总上一个自然周，生成周报；
 - 每月 1 日 08:10：汇总上一个自然月，生成月报。
@@ -124,42 +126,85 @@ flowchart LR
 - **使用自己的飞书身份**：通过官方飞书 CLI 写入知识库，不保存机器人 App Secret。
 - **看得见的自动化**：本地管理页面展示配置、会议状态、最近生成结果与失败重试。
 - **菜单栏常驻**：直接查看状态、暂停或恢复采集、立即生成日报，并打开当天飞书文档。
-- **登录后自动启动**：使用 macOS 原生登录项启动和恢复，只监听 `127.0.0.1`。
+- **登录后自动启动**：使用系统原生登录项或 XDG 自动启动，只监听 `127.0.0.1`。
+- **跨平台桌面端**：Windows 使用系统托盘与登录启动，Linux 提供系统托盘和 XDG 自动启动。
+
+### 工作档案智能层
+
+1. 自动识别项目边界，将不同 Agent、终端和应用证据合并到同一项目；
+2. 连接「意图 → 执行 → 产物 → 结果」，呈现工作是如何真正完成的；
+3. 把提交、PR、发布、文档、文件、构建、测试、部署和决策作为一等产物；
+4. 为报告段落计算可信度，可展开查看对应的本地原始证据；
+5. 发布前提供完整预览、直接编辑、项目重归类和初稿/当前版本对比；
+6. 从用户接受的修改中学习项目别名、排除主题与报告篇幅，偏好只保存在本机；
+7. 检测缺少结果或项目归属的证据，最多提出两个聚焦问题；
+8. 每个工作日早晨恢复最近的活跃项目和未决上下文；
+9. 搜索长期工作档案，并用带编号来源的回答支持复盘；
+10. Windows/Linux Release 流程自动执行安装、启动、健康检查、凭据回环与卸载验收。
+
+## 平台能力
+
+| 能力 | macOS | Windows | Linux |
+| --- | :---: | :---: | :---: |
+| Claude Code、Codex、OpenCode 日志 | ✓ | ✓ | ✓ |
+| 前台应用与窗口上下文 | ✓ | ✓ | ✓¹ |
+| 日报、周报、月报与本地 Markdown | ✓ | ✓ | ✓ |
+| 飞书 CLI 用户授权与知识库归档 | ✓ | ✓ | ✓ |
+| 菜单栏 / 系统托盘与登录启动 | ✓ | ✓ | ✓ |
+| Teams 系统音频与本地转写 | ✓ | 规划中 | 规划中 |
+
+<sub>¹ Linux X11 使用 `xdotool`；KDE Wayland 使用 `kdotool`。其他 Wayland 桌面的 Agent 日志与报告功能仍可使用，但前台窗口采集可能受桌面安全策略限制。</sub>
+
+> [!WARNING]
+> “支持”和“已经完成实机端到端验收”不是一回事。v0.3 的三系统核心测试和原生安装包构建均已通过；Windows/Linux 的交互安装、托盘、自动启动、凭据持久化、前台窗口采集和飞书实际发布仍需实机验收。完整状态见 [兼容性与验证矩阵](docs/COMPATIBILITY.md)。在这些检查完成前，Windows/Linux 版本应标记为 **Preview**。
 
 ## 快速开始
 
 ### 环境要求
 
-- macOS 13+
-- 一个可用的飞书自建应用与知识库页面
-- 一个 OpenAI 或 Anthropic 兼容的 LLM API
+- macOS 13+、Windows 10+，或主流 64 位 Linux 桌面发行版；
+- 一个可用的飞书自建应用与知识库页面；
+- 一个 OpenAI 或 Anthropic 兼容的 LLM API。
 
 ### 1 · 安装 Worklog
 
-从 [Releases](https://github.com/dedarek/ai-human-daily-worklog/releases) 下载 `Worklog-*-universal-unsigned.dmg`，打开后把 Worklog 拖入 Applications。安装包同时支持 Apple Silicon 与 Intel，并内置 Node.js、飞书 CLI 和 Universal whisper.cpp；无需另外安装运行环境。
+从 [Releases](https://github.com/dedarek/ai-human-daily-worklog/releases) 下载对应系统的安装包：
 
-由于当前预览版没有购买 Apple Developer Program，第一次启动时请在 Applications 中右键 Worklog，选择「打开」，再在确认窗口中选择「打开」。如果 macOS 仍然拦截，请前往「系统设置 → 隐私与安全性」选择「仍要打开」。之后可以像普通菜单栏应用一样启动。
+| 系统 | 文件 | 安装方式 |
+| --- | --- | --- |
+| macOS | `Worklog-*-universal-unsigned.dmg` | 打开后拖入 Applications；同时支持 Apple Silicon 与 Intel |
+| Windows | `Worklog-*-Windows-x64.exe` | 运行安装向导，可选择目录并创建开始菜单/桌面入口 |
+| Linux | `Worklog-*-Linux-x86_64.AppImage` | 添加执行权限后直接运行 |
+| Debian / Ubuntu | `Worklog-*-Linux-amd64.deb` | 使用系统软件安装器或 `apt` 安装 |
+
+当前公开预览包未购买商业代码签名证书。macOS 第一次启动时请在 Applications 中右键 Worklog，选择「打开」；Windows SmartScreen 如出现提示，请确认下载来源为本仓库 Release 后选择「更多信息 → 仍要运行」。Linux AppImage 可执行：
+
+```bash
+chmod +x Worklog-*-Linux-x86_64.AppImage
+./Worklog-*-Linux-x86_64.AppImage
+```
 
 首次打开后，向导会依次完成：
 
-1. 屏幕与系统音频录制、辅助功能权限；
+1. 当前系统需要的前台应用权限（macOS 另含屏幕与系统音频权限）；
 2. 飞书应用配置和用户授权；
-3. LLM、目标知识库和 Whisper Small 模型下载；
+3. LLM 与目标知识库；macOS 额外下载 Whisper Small 模型；
 4. 完整性检查与开始运行。
 
 之后 Worklog 常驻菜单栏。退出、暂停记录、手动生成和打开当天文档都不需要终端。
 
 ### 从源码运行
 
-源码开发需要 Node.js 20+、Xcode Command Line Tools 和 [飞书 CLI](https://open.feishu.cn/document/no_class/mcp-archive/feishu-cli-installation-guide.md)。
+源码开发需要 Node.js 20+ 和 [飞书 CLI](https://open.feishu.cn/document/no_class/mcp-archive/feishu-cli-installation-guide.md)。macOS 会议能力还需要 Xcode Command Line Tools。
 
 ```bash
 git clone https://github.com/dedarek/ai-human-daily-worklog.git
 cd ai-human-daily-worklog
 npm install
-npm run build-native
 npm start
 ```
+
+macOS 如需 Teams 系统音频，再运行 `npm run build-native`。Linux 前台窗口采集请安装 `xdotool`（X11）或 `kdotool`（KDE Wayland）。
 
 访问 [http://127.0.0.1:4318](http://127.0.0.1:4318)。
 
@@ -181,7 +226,7 @@ lark-cli auth status --json --verify
 2. 填写 LLM 协议、API 地址、模型和 API Key；
 3. 粘贴目标飞书知识库父页面链接；
 4. 在「今天采集了什么」中确认过滤后的素材；
-5. 点击「立即生成今天日报」完成首次验证。
+5. 在「日报预览与校正」中生成预览，查看证据可信度，再发布到飞书。
 
 ```bash
 # 一次检查主要依赖与授权状态
@@ -193,7 +238,7 @@ npm run install-service
 
 ## Teams 会议
 
-Worklog 通过 CoreAudio 判断 Teams 是否存在真实音频活动，并使用 macOS ScreenCaptureKit 采集电脑正在播放的声音。窗口标题只辅助识别入会和会议名称，不依赖固定关键词。
+macOS 版本通过 CoreAudio 判断 Teams 是否存在真实音频活动，并使用 ScreenCaptureKit 采集电脑正在播放的声音。窗口标题只辅助识别入会和会议名称，不依赖固定关键词。Windows 与 Linux 预览版暂不采集会议音频，也不会生成空会议记录；Agent、应用和报告能力不受影响。
 
 `.dmg` 已内置 Universal whisper.cpp，首次向导会下载并校验 Whisper Small 模型。仅从源码运行时需要手动准备依赖：
 
@@ -210,8 +255,8 @@ curl -L -o "$HOME/Library/Application Support/Worklog/models/ggml-small.bin" \
 
 Worklog 是一个 **local-first** 项目，而不是一个云端监控服务。
 
-- 原始活动、会议音频、逐字稿、报告副本和飞书索引保存在本机 `~/Library/Application Support/Worklog/`；
-- LLM API Key 保存在 macOS Keychain；
+- 原始活动、报告副本和飞书索引保存在系统标准用户数据目录；macOS 的会议音频和逐字稿也保存在其中；
+- LLM API Key 在 macOS 使用 Keychain，在 Windows 使用当前用户 DPAPI，在 Linux 优先使用 Secret Service；
 - 原始会议音频不会发送给 LLM，也不会上传飞书；
 - 只有经过过滤与脱敏的工作证据、会议文本会发送给你配置的 LLM；
 - 本机数据、配置与密钥均被 Git 忽略。
@@ -223,7 +268,7 @@ Worklog 是一个 **local-first** 项目，而不是一个云端监控服务。
 
 ```text
 src/
-├── sampler.ts        # macOS 前台应用采样
+├── sampler.ts        # macOS / Windows / Linux 前台应用采样
 ├── agentLogs.ts      # Agent 执行日志解析
 ├── collector.ts      # 工作证据过滤与聚合
 ├── teamsMeeting.ts   # Teams 检测、录制、转写与恢复
@@ -235,6 +280,7 @@ src/
 └── scheduler.ts      # 自动运行计划
 native/               # macOS 音频检测与系统音频采集
 macos/                # 菜单栏应用、权限声明与签名配置
+desktop/              # Windows / Linux Electron 托盘应用与图标
 public/               # 本地管理页面
 scripts/              # 自检、Universal App、DMG 与公证脚本
 test/                 # 单元测试
@@ -275,8 +321,18 @@ launchctl print gui/$(id -u)/com.local.mac-worklog-feishu
 
 Worklog 的目标不只是生成一份日报，而是成为 AI 时代个人可拥有、可迁移、可长期检索的工作档案。下面是当前规划方向；顺序代表大致优先级，不代表固定发布日期。
 
+它的核心不是记录“人在电脑前忙了多久”，而是恢复分散在人、Agent、会议和产物之间的工作上下文。更完整的原则、产品闭环和明确不做的事情见 [产品愿景](docs/VISION.md)。
+
+### 下一批优先级
+
+1. **把预览能力产品化**：句子级重写、可视化差异和桌面通知，让每日校正更短。
+2. **扩展真实产物连接**：读取 GitHub PR、Issue、CI 和发布结果，减少仅靠文本推断。
+3. **完成交互式实机验收**：覆盖 Windows 10/11、GNOME 与 KDE，并验证真实飞书发布。
+4. **补齐隐私生命周期**：原始证据保留期限、按项目删除、加密和离线模型。
+5. **开放插件协议**：让新 Agent、会议平台和归档目的地无需修改核心即可接入。
+
 <details open>
-<summary><strong>近期 · 做成真正的 macOS 产品</strong></summary>
+<summary><strong>近期 · 做成可靠的跨平台桌面产品</strong></summary>
 
 
 - [x] 建立同时支持 Apple Silicon 与 Intel 的 `.app` / `.dmg` 构建、签名与 Apple 公证发布链路
@@ -286,8 +342,11 @@ Worklog 的目标不只是生成一份日报，而是成为 AI 时代个人可�
 - [x] 将飞书授权、LLM 配置、系统权限、Whisper 模型下载整合进首次启动向导
 - [x] 将运行数据迁移到标准的 `Application Support/Worklog`，不再依赖源码目录
 - [ ] 支持应用内自动更新、版本说明和安全回滚
-- [x] 在 Mac 睡眠、关机或离线错过任务后自动补跑，并保证同一报告不会重复创建
+- [x] 在电脑睡眠、关机或离线错过任务后自动补跑，并保证同一报告不会重复创建
 - [ ] 提供更清楚的健康检查、失败通知、重试队列与可导出的诊断报告
+- [ ] 完成 Windows 10/11 的安装、托盘、登录启动、DPAPI、飞书发布与卸载实机验收
+- [ ] 完成 Linux AppImage/deb、GNOME/KDE、Secret Service、飞书发布与卸载实机验收
+- [x] 在 Windows/Linux 原生 CI 中执行安装包启动、健康检查、凭据回环与卸载验收
 
 </details>
 
@@ -328,15 +387,22 @@ Worklog 的目标不只是生成一份日报，而是成为 AI 时代个人可�
 <summary><strong>更懂工作的报告</strong></summary>
 
 
-- [ ] 自动识别项目边界，把同一项目在多个 Agent 和应用中的活动合并
+- [x] 自动识别项目边界，把同一项目在多个 Agent 和应用中的活动合并
+- [x] 连接用户意图、Agent 执行、代码/文档产物与最终验证，形成可查询的工作链路
+- [x] 将 Git commit、PR、Release、文档、文件、构建、测试、部署和决策识别为一等工作产物
 - [ ] 跨会话、跨 Agent 去重，避免把同一修改重复计算为多项成果
 - [ ] 区分探索过程、最终决策、已完成产出、阻塞问题与风险
 - [ ] 从会议结论追踪后续执行，检查待办是否在之后的工作记录中落地
 - [ ] 支持日报、周报、月报、项目周报、绩效回顾等自定义模板
-- [ ] 为每条重要结论保留可回溯的本地证据，但默认不在正式报告中堆砌证据编号
+- [x] 为每条重要结论保留可回溯的本地证据，但默认不在正式报告中堆砌证据编号
 - [ ] 建立长期项目记忆，让周报和月报理解连续进展，而不是简单拼接日报
 - [ ] 支持中文、英文及双语报告，并允许配置个人写作语气
-- [ ] 在发送前提供预览、局部重写、人工确认和版本对比
+- [x] 在发送前提供预览、全文改写、人工确认和初稿/当前版本对比
+- [x] 报告句子可回溯到本地证据与置信度，低置信结论在发布前提示
+- [x] 从用户的项目重分配、删除和改写中学习本地偏好，不上传个人行为画像
+- [x] 下班前对证据缺口提出至多 1–2 个聚焦问题，避免错误永久归档
+- [x] 生成晨间续接摘要，恢复活跃项目、未决事项和最近上下文
+- [x] 对个人历史档案进行带证据的搜索与问答，支持项目复盘
 
 </details>
 
@@ -359,13 +425,16 @@ Worklog 的目标不只是生成一份日报，而是成为 AI 时代个人可�
 <summary><strong>跨平台与开放生态</strong></summary>
 
 
-- [ ] Linux 桌面版，优先支持常见终端、编辑器和 Agent 日志
-- [ ] Windows 桌面版，并研究 Teams 系统音频的原生采集方案
+- [x] Linux 桌面版：AppImage / deb、系统托盘、自动启动、Agent 日志与前台应用
+- [x] Windows 桌面版：安装向导、系统托盘、登录启动、Agent 日志与前台应用
+- [ ] Windows Teams 系统音频的原生采集方案
+- [ ] GNOME Wayland 前台窗口采集扩展与 Flatpak 包
 - [ ] 定义稳定的工作证据、会议和报告数据格式
 - [ ] 支持配置、模板和历史索引的导入导出
 - [ ] 提供采集器、过滤器、报告模板和发布器插件接口
 - [x] 增加贡献指南、隐私模型、安全策略与标准 Issue / PR 模板
-- [ ] 建立兼容性矩阵、公开版本计划与稳定发布节奏
+- [x] 建立兼容性与验证矩阵，明确“支持、已构建、已实机验收”的差异
+- [ ] 公开版本计划与稳定发布节奏
 
 </details>
 
@@ -377,11 +446,16 @@ Worklog 的目标不只是生成一份日报，而是成为 AI 时代个人可�
 npm run dev
 npm run check
 npm test
+npm run smoke
 node --check public/app.js
 
 # 构建 Universal Worklog.app 与本地测试 DMG
 npm run build-app
 npm run build-dmg
+
+# 构建 Windows 安装器或 Linux AppImage / deb
+npm run build-windows
+npm run build-linux
 ```
 
 正式发布由 `.github/workflows/release.yml` 完成。仓库需要配置以下 Actions Secrets：

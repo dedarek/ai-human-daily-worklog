@@ -1,4 +1,4 @@
-name: Release macOS DMG
+name: Release desktop apps
 
 on:
   workflow_dispatch:
@@ -10,6 +10,8 @@ permissions:
 
 jobs:
   dmg:
+    outputs:
+      signed: ${{ steps.package.outputs.signed }}
     runs-on: macos-15
     steps:
       - uses: actions/checkout@v7
@@ -48,17 +50,61 @@ jobs:
             npm run build-dmg
             echo "signed=false" >> "$GITHUB_OUTPUT"
           fi
-      - name: Publish GitHub release
-        if: startsWith(github.ref, 'refs/tags/')
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          if [[ "${{ steps.package.outputs.signed }}" == "true" ]]; then
-            gh release create "${GITHUB_REF_NAME}" release/*.dmg --generate-notes --title "Worklog ${GITHUB_REF_NAME}"
-          else
-            gh release create "${GITHUB_REF_NAME}" release/*.dmg --prerelease --title "Worklog ${GITHUB_REF_NAME} · Unsigned Preview" --notes $'Universal macOS preview for Apple Silicon and Intel.\n\n⚠️ This build is not notarized by Apple. Drag Worklog into Applications, then right-click it and choose Open the first time. If macOS still blocks it, open System Settings → Privacy & Security and choose Open Anyway.'
-          fi
       - uses: actions/upload-artifact@v6
         with:
           name: Worklog-universal-dmg
           path: release/*.dmg
+
+  windows:
+    runs-on: windows-2025
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm run build-windows
+      - shell: pwsh
+        run: ./scripts/acceptance-windows.ps1
+      - uses: actions/upload-artifact@v6
+        with:
+          name: Worklog-windows
+          path: release/desktop/*.exe
+
+  linux:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm run build-linux
+      - run: sudo apt-get update && sudo apt-get install -y xvfb xdotool libsecret-tools
+      - run: ./scripts/acceptance-linux.sh
+      - uses: actions/upload-artifact@v6
+        with:
+          name: Worklog-linux
+          path: |
+            release/desktop/*.AppImage
+            release/desktop/*.deb
+
+  publish:
+    if: startsWith(github.ref, 'refs/tags/')
+    needs: [dmg, windows, linux]
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/download-artifact@v7
+        with:
+          path: release-assets
+          merge-multiple: true
+      - name: Publish GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if [[ "${{ needs.dmg.outputs.signed }}" == "true" ]]; then
+            gh release create "${GITHUB_REF_NAME}" release-assets/* --repo "${GITHUB_REPOSITORY}" --generate-notes --title "Worklog ${GITHUB_REF_NAME}"
+          else
+            gh release create "${GITHUB_REF_NAME}" release-assets/* --repo "${GITHUB_REPOSITORY}" --prerelease --title "Worklog ${GITHUB_REF_NAME} · Cross-platform Preview" --notes $'Worklog now includes macOS, Windows, and Linux desktop builds.\n\nmacOS: the current DMG is not notarized. Drag Worklog into Applications, then right-click and choose Open the first time.\n\nWindows/Linux preview: Agent logs, foreground apps, automatic reports, Feishu, and local Markdown are implemented, and native CI package builds pass. Real-desktop end-to-end validation is still pending for interactive install/uninstall, tray actions, autostart, credential persistence, foreground-window capture, and actual Feishu publishing. Teams system-audio capture remains macOS-only. See docs/COMPATIBILITY.md before treating this release as stable.'

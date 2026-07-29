@@ -11,19 +11,21 @@ Thank you for helping build a trustworthy personal work archive for the AI-agent
 
 ## Local development
 
-Worklog currently targets macOS 13+ and Node.js 20+.
+Worklog targets macOS 13+, Windows 10+, mainstream Linux desktops, and Node.js 20+.
 
 ```bash
 npm install
-npm run build-native
 npm run dev
 ```
+
+`npm run build-native` is only required for macOS Teams system-audio development.
 
 Before submitting a change:
 
 ```bash
 npm run check
 npm test
+npm run smoke
 node --check public/app.js
 ```
 

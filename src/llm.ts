@@ -1,22 +1,7 @@
-import type { Activity, Secrets, Settings } from "./types.js";
-import { spawn } from "node:child_process";
+import type { Activity, Secrets, Settings, WorkGraph } from "./types.js";
+import type { ArchiveSearchResult, WorkPreferences } from "./workGraph.js";
+import { preferencePrompt } from "./workGraph.js";
 
-async function curlPost(url: string, headers: Record<string, string>, payload: object) {
-  return new Promise<{ status: number; text: string }>((resolve, reject) => {
-    const args = ["-sS", "--max-time", "180", "-X", "POST", url, "-w", "\n%{http_code}", "--data-binary", "@-"];
-    for (const [name, value] of Object.entries(headers)) args.push("-H", `${name}: ${value}`);
-    const child = spawn("/usr/bin/curl", args, { stdio: ["pipe", "pipe", "pipe"] });
-    let stdout = "", stderr = "";
-    child.stdout.on("data", chunk => stdout += chunk);
-    child.stderr.on("data", chunk => stderr += chunk);
-    child.on("error", reject);
-    child.on("close", code => {
-      if (code !== 0) return reject(new Error(stderr.trim() || `curl exited ${code}`));
-      const split = stdout.lastIndexOf("\n"); resolve({ status: Number(stdout.slice(split + 1)), text: stdout.slice(0, split) });
-    });
-    child.stdin.end(JSON.stringify(payload));
-  });
-}
 async function fetchPost(url: string, headers: Record<string, string>, payload: object) {
   const response = await fetch(url, { method: "POST", headers, body: JSON.stringify(payload), signal: AbortSignal.timeout(240_000) });
   return { status: response.status, text: await response.text() };
@@ -38,7 +23,7 @@ function openAIResponseText(raw: string) {
   return content;
 }
 
-async function callModel(prompt: string, settings: Settings, secrets: Secrets, maxTokens = 1800) {
+export async function callModel(prompt: string, settings: Settings, secrets: Secrets, maxTokens = 1800) {
   if (!secrets.llmApiKey) throw new Error("请先在设置中填写 LLM API Key。");
   const base = settings.llmBaseUrl.replace(/\/$/, "");
   const url = settings.llmProtocol === "anthropic" ? `${base}/v1/messages` : `${base}/chat/completions`;
@@ -56,7 +41,7 @@ async function callModel(prompt: string, settings: Settings, secrets: Secrets, m
         max_tokens: maxTokens,
         ...(settings.llmProtocol === "openai" ? { stream: true } : {}),
       };
-      response = settings.llmProtocol === "openai" ? await fetchPost(url, headers, payload) : await curlPost(url, headers, payload);
+      response = await fetchPost(url, headers, payload);
       break;
     }
     catch (error: any) {
@@ -106,7 +91,7 @@ export function sourceSummaryLine(activities: Activity[]) {
     .sort((a, b) => b[1] - a[1]).map(([name, count]) => `${name}: ${count} 条`).join("；");
 }
 
-export async function writeReport(date: string, activities: Activity[], settings: Settings, secrets: Secrets, verifiedFacts: string[] = []) {
+export async function writeReport(date: string, activities: Activity[], settings: Settings, secrets: Secrets, verifiedFacts: string[] = [], workContext?: { graph?: WorkGraph; answers?: Record<string, string>; preferences?: WorkPreferences }) {
   if (!secrets.llmApiKey) throw new Error("请先在设置中填写 LLM API Key。");
   const sourceSummary = sourceSummaryLine(activities);
   const seen = new Set<string>(); const groups = new Map<string, Activity[]>();
@@ -135,6 +120,9 @@ export async function writeReport(date: string, activities: Activity[], settings
   selected.sort((a, b) => a.timestamp.localeCompare(b.timestamp));
   const width = (a: Activity) => a.process === "Teams Meeting" ? 1200 : isConversation(a) ? 360 : agentSources.has(a.process) ? 180 : 500;
   const compact = selected.slice(0, 200).map(x => `${x.evidenceId} | ${x.timestamp} | ${x.process} | ${x.message.replace(/[\u0000-\u001F\u007F]/g, " ").slice(0, width(x))}`).join("\n");
+  const graphSummary = workContext?.graph?.projects.map(project => `${project.name}：${project.chains.map(chain => `${chain.title}→${chain.outcome}（${chain.status}，置信度${chain.confidence}）`).join("；")}`).join("\n") || "无";
+  const answers = Object.values(workContext?.answers || {}).filter(Boolean).join("；") || "无";
+  const preferences = workContext?.preferences ? preferencePrompt(workContext.preferences) : "无";
   const context = `你是资深项目负责人，仅依据操作留痕撰写 ${date} 的工作日报。
 
 共同规则：
@@ -151,6 +139,11 @@ export async function writeReport(date: string, activities: Activity[], settings
 
 来源统计：${sourceSummary || "无"}
 系统验证事实：${verifiedFacts.join("；") || "无"}
+本地项目与工作链：
+${graphSummary}
+用户对证据缺口的补充：${answers}
+用户已确认的本地写作偏好：
+${preferences}
 操作留痕：
 ${compact || "当天没有采集到可用操作记录。"}`;
   const withoutSectionHeading = (text: string) => text.trim().replace(/^#{1,2}\s+[^\n]+\n+/, "");
@@ -159,6 +152,12 @@ ${compact || "当天没有采集到可用操作记录。"}`;
   const judgements = withoutSectionHeading(await callModel(`${context}\n\n只写“关键问题与判断”的正文，不要输出标题。仅归纳操作留痕能直接支撑的问题、原因判断与决策依据，避免重复项目进展；若留痕没有体现明确的问题、冲突或决策，只写一句“当天留痕未体现明确的关键问题或决策”，不要为凑内容而臆测原因、数据或结论。约 200–450 个中文字符。`, settings, secrets, 420));
   const status = withoutSectionHeading(await callModel(`${context}\n\n只写“当前状态”的正文，不要输出标题。用状态词（已完成、已验证、进行中、受阻、待确认）逐个项目概括截至当天 18:00 的状态，每个项目一句，不要重复“项目进展与产出”的过程描述；系统验证事实优先。约 150–300 个中文字符。`, settings, secrets, 320));
   return `# ${date} 工作日志\n\n## 工作概览\n\n${overview}\n\n## 项目进展与产出\n\n${projects}\n\n## 关键问题与判断\n\n${judgements}\n\n## 当前状态\n\n${status}`;
+}
+
+export async function answerArchiveQuestion(question: string, results: ArchiveSearchResult[], settings: Settings, secrets: Secrets) {
+  if (!results.length) return "本地工作档案中没有找到足以回答该问题的内容。";
+  const sources = results.map((result, index) => `[${index + 1}] ${result.date}｜${result.title}｜${result.snippet}｜证据：${result.evidenceIds.join(",") || "报告原文"}`).join("\n");
+  return (await callModel(`仅依据下面的本地工作档案回答问题。每个事实后使用 [1] 形式标注来源编号；证据不足时明确说无法确认，不得补充常识或猜测。\n\n问题：${question}\n\n档案来源：\n${sources}`, settings, secrets, 900)).trim();
 }
 
 export async function writeSummaryReport(kind: "weekly" | "monthly", label: string, sourceReports: Array<{ date: string; content: string }>, settings: Settings, secrets: Secrets) {
