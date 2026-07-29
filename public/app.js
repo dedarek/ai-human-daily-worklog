@@ -1,17 +1,26 @@
 const $ = selector => document.querySelector(selector);
 const form = $("#settings");
 const escapeHtml = value => String(value ?? "").replace(/[&<>"']/g, char => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[char]);
-const today = () => new Date().toLocaleDateString("en-CA");
+const safeUrl = value => { try { const url = new URL(String(value)); return ["https:", "http:"].includes(url.protocol) ? url.href : ""; } catch { return ""; } };
+let configuredTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+const today = () => {
+  const parts = new Intl.DateTimeFormat("en-CA", { timeZone: configuredTimezone, year: "numeric", month: "2-digit", day: "2-digit" }).formatToParts(new Date());
+  const get = type => parts.find(part => part.type === type)?.value;
+  return `${get("year")}-${get("month")}-${get("day")}`;
+};
 let currentDraft = null;
 let auditEvidence = new Map();
 
 async function json(url, options) {
-  const response = await fetch(url, options); const body = await response.json();
+  const mutating = options && !["GET", "HEAD"].includes(String(options.method || "GET").toUpperCase());
+  const request = options ? { ...options, ...(mutating && options.body === undefined ? { body: "{}" } : {}), headers: { ...(options.headers || {}), ...(mutating ? { "Content-Type": "application/json", "X-Worklog-Request": "1" } : {}) } } : options;
+  const response = await fetch(url, request); const text = await response.text();
+  let body; try { body = text ? JSON.parse(text) : {}; } catch { throw new Error(`本地服务返回了无法解析的响应（HTTP ${response.status}）`); }
   if (!response.ok) throw new Error(body.error || "请求失败"); return body;
 }
 
-const confidenceLabel = value => value >= .75 ? "高可信" : value >= .5 ? "中可信" : "需确认";
-const confidenceClass = value => value >= .75 ? "high" : value >= .5 ? "medium" : "low";
+const confidenceLabel = value => value >= .65 ? "强匹配" : value >= .4 ? "部分匹配" : "弱匹配";
+const confidenceClass = value => value >= .65 ? "high" : value >= .4 ? "medium" : "low";
 const artifactNames = { commit: "提交", pull_request: "PR", release: "发布", document: "文档", file: "文件", build: "构建", test: "测试", deployment: "部署", decision: "决策" };
 
 function initializeFrame() {
@@ -30,6 +39,15 @@ function initializeFrame() {
     links.forEach(link => link.classList.toggle("active", link.getAttribute("href") === `#${visible.target.id}`));
   }, { rootMargin: "-15% 0px -70%", threshold: [0, .15, .5] });
   sections.forEach(section => observer.observe(section));
+}
+
+function updateFrameDate() {
+  const now = new Date();
+  const parts = new Intl.DateTimeFormat("en", { timeZone: configuredTimezone, year: "numeric", month: "short", day: "2-digit" }).formatToParts(now);
+  const value = type => parts.find(part => part.type === type)?.value || "";
+  $("#todayLabel").textContent = new Intl.DateTimeFormat("zh-CN", { timeZone: configuredTimezone, year: "numeric", month: "long", day: "numeric" }).format(now);
+  $("#dateDay").textContent = value("day"); $("#dateMonth").textContent = `${value("month").toUpperCase()} ${value("year")}`;
+  $("#dateWeekday").textContent = new Intl.DateTimeFormat("zh-CN", { timeZone: configuredTimezone, weekday: "long" }).format(now);
 }
 
 function markPopulated(selector, populated) {
@@ -74,7 +92,7 @@ function renderTrace(draft) {
   const claims = draft?.trace?.claims || [];
   $("#trace").innerHTML = claims.length ? `<h3>报告证据追溯</h3>${claims.map(claim => {
     const evidence = claim.evidenceIds.map(id => auditEvidence.get(id)).filter(Boolean);
-    return `<details class="claim ${confidenceClass(claim.confidence)}"><summary><span>${escapeHtml(claim.text)}</span><b>${confidenceLabel(claim.confidence)} · ${Math.round(claim.confidence * 100)}%</b></summary>
+    return `<details class="claim ${confidenceClass(claim.confidence)}"><summary><span>${escapeHtml(claim.text)}</span><b>证据文本${confidenceLabel(claim.confidence)} · ${Math.round(claim.confidence * 100)}%</b></summary>
       <div class="claim-evidence">${evidence.length ? evidence.map(item => `<p><code>${escapeHtml(item.evidenceId)}</code> ${new Date(item.timestamp).toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" })} · ${escapeHtml(item.process)}<br/>${escapeHtml(item.message)}</p>`).join("") : `<p>关联证据：${escapeHtml(claim.evidenceIds.join("、") || "尚未建立直接关联")}</p>`}</div>
     </details>`;
   }).join("")}` : '<p class="hint">这份草稿还没有可显示的证据映射。</p>';
@@ -139,9 +157,9 @@ async function loadRuns() {
   const runs = await json("/api/runs");
   $("#runs").innerHTML = runs.length ? runs.map(run => {
     const label = run.kind === "meeting" ? run.title || "Teams 会议内容" : run.kind === "weekly" ? `周报 ${run.start} 至 ${run.end}` : run.kind === "monthly" ? `月报 ${run.start?.slice(0, 7) || ""}` : run.date || "—";
-    const url = run.url || run.document?.url;
+    const url = safeUrl(run.url || run.document?.url);
     const result = run.status === "meeting_included" ? "已纳入日报素材" : run.status === "meeting_ignored" ? "无有效内容，已忽略" : run.status === "success" ? (run.sourceDays ? `汇总 ${run.sourceDays} 个工作日` : "已生成") : "生成失败";
-    return `<article class="run ${escapeHtml(run.status)}"><div><b>${escapeHtml(label)}</b><small>${new Date(run.at).toLocaleString("zh-CN")}</small></div><span>${result}</span>${url ? `<a target="_blank" href="${escapeHtml(url)}">打开文档 ↗</a>` : run.error ? `<em>${escapeHtml(run.error)}</em>` : ""}</article>`;
+    return `<article class="run ${escapeHtml(run.status)}"><div><b>${escapeHtml(label)}</b><small>${new Date(run.at).toLocaleString("zh-CN")}</small></div><span>${result}</span>${url ? `<a target="_blank" rel="noreferrer" href="${escapeHtml(url)}">打开文档 ↗</a>` : run.error ? `<em>${escapeHtml(run.error)}</em>` : ""}</article>`;
   }).join("") : '<p class="hint">还没有生成记录。</p>';
   markPopulated("#runs", runs.length > 0);
 }
@@ -178,6 +196,7 @@ async function loadMeetingStatus() {
 
 async function load() {
   const [settings, status, setup] = await Promise.all([json("/api/settings"), json("/api/status"), json("/api/setup/status")]);
+  configuredTimezone = settings.timezone || configuredTimezone; updateFrameDate();
   for (const [key, value] of Object.entries(settings)) {
     const element = form.elements[key];
     if (element?.type === "checkbox") element.checked = value === true;
@@ -207,14 +226,18 @@ form.addEventListener("submit", async event => {
   data.teamsAutoRecord = form.elements.teamsAutoRecord.checked;
   data.capturePaused = form.elements.capturePaused.checked;
   data.redactionEnabled = form.elements.redactionEnabled.checked;
+  data.markdownOutputEnabled = form.elements.markdownOutputEnabled.checked;
+  data.retentionEnabled = form.elements.retentionEnabled.checked;
   try { await json("/api/settings", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(data) }); $("#notice").textContent = "配置已保存。"; await load(); }
   catch (error) { $("#notice").textContent = error.message; }
 });
 
 $("#run").addEventListener("click", async () => {
-  $("#notice").textContent = "正在采集、生成并通过飞书 CLI 写入，请稍候…";
-  try { const output = await json("/api/run", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ force: true }) }); $("#notice").innerHTML = `已完成：${output.events} 条活动\n飞书文档：<a href="${escapeHtml(output.url)}" target="_blank">${escapeHtml(output.title)}</a>`; await loadRuns(); }
+  $("#notice").textContent = "正在采集、生成并写入已配置的归档位置，请稍候…";
+  if ($("#run").disabled) return; $("#run").disabled = true;
+  try { const output = await json("/api/run", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ force: true }) }); const url = safeUrl(output.url); $("#notice").innerHTML = url ? `已完成：${output.events} 条活动\n飞书文档：<a href="${escapeHtml(url)}" target="_blank" rel="noreferrer">${escapeHtml(output.title)}</a>` : `已完成：${output.events} 条活动`; await loadRuns(); }
   catch (error) { $("#notice").textContent = error.message; }
+  finally { $("#run").disabled = false; }
 });
 
 $("#bindWiki").addEventListener("click", async () => {
@@ -257,11 +280,11 @@ $("#draftRegenerate").addEventListener("click", () => saveDraft(true).catch(erro
 $("#draftEditor").addEventListener("input", () => $("#draftCurrent").textContent = $("#draftEditor").value);
 $("#draftPublish").addEventListener("click", async () => {
   if (!currentDraft) return;
-  $("#notice").textContent = "正在把当前版本写入飞书…";
+  $("#notice").textContent = "正在把当前版本写入归档位置…";
   try {
     await saveDraft(false);
     const output = await json(`/api/draft/${encodeURIComponent(currentDraft.date)}/publish`, { method: "POST" });
-    renderDraft(output.draft); $("#notice").innerHTML = `已发布当前版本：<a href="${escapeHtml(output.url)}" target="_blank">${escapeHtml(output.title)}</a>`; await loadRuns();
+    renderDraft(output.draft); const url = safeUrl(output.url); $("#notice").innerHTML = url ? `已发布当前版本：<a href="${escapeHtml(url)}" target="_blank" rel="noreferrer">${escapeHtml(output.title)}</a>` : "当前版本已发布。"; await loadRuns();
   } catch (error) { $("#notice").textContent = error.message; }
 });
 $("#morningGenerate").addEventListener("click", async () => {
@@ -284,4 +307,4 @@ $("#archiveAsk").addEventListener("click", async () => {
 $("#archiveQuery").addEventListener("keydown", event => { if (event.key === "Enter") { event.preventDefault(); $("#archiveSearch").click(); } });
 initializeFrame();
 load().then(loadAudit).then(() => document.body.classList.add("is-ready")).catch(error => $("#notice").textContent = error.message);
-setInterval(() => Promise.all([loadMeetingStatus(), loadMeetings()]).catch(() => {}), 5000);
+setInterval(() => { if (document.visibilityState === "visible") Promise.all([loadMeetingStatus(), loadMeetings()]).catch(() => {}); }, 5000);

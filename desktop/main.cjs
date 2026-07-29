@@ -18,7 +18,8 @@ function platformDataDir() {
 }
 
 async function request(url, options) {
-  const response = await fetch(`${endpoint}${url}`, options);
+  const requestOptions = options ? { ...options, headers: { ...(options.headers || {}), "X-Worklog-Request": "1" } } : options;
+  const response = await fetch(`${endpoint}${url}`, requestOptions);
   if (!response.ok) throw new Error(await response.text());
   return response.json();
 }
@@ -35,7 +36,10 @@ async function waitForServer() {
 async function startServer() {
   process.env.WORKLOG_DATA_DIR ||= platformDataDir();
   process.env.WORKLOG_ASSET_DIR ||= app.getAppPath();
-  process.env.WORKLOG_BUNDLED_LARK_CLI ||= path.join(app.getAppPath(), "node_modules", "@larksuite", "cli", "scripts", "run.js");
+  process.env.WORKLOG_BUNDLED_LARK_CLI ||= app.isPackaged
+    ? path.join(process.resourcesPath, "lark-cli-runtime", "scripts", "run.js")
+    : path.join(app.getAppPath(), "node_modules", "@larksuite", "cli", "scripts", "run.js");
+  try { await request("/api/status"); return; } catch { /* start the packaged service below */ }
   await import(pathToFileURL(path.join(app.getAppPath(), "dist", "server.js")).href);
   await waitForServer();
 }
@@ -87,6 +91,7 @@ async function enableLinuxAutostart() {
   const directory = path.join(process.env.XDG_CONFIG_HOME || path.join(os.homedir(), ".config"), "autostart");
   await mkdir(directory, { recursive: true });
   const executable = process.env.APPIMAGE || process.execPath;
+  if (/[\r\n]/.test(executable)) throw new Error("应用路径包含不安全的换行符，无法创建自动启动项。");
   const escaped = executable.replace(/([\\"`$])/g, "\\$1");
   await writeFile(path.join(directory, "worklog.desktop"), `[Desktop Entry]\nType=Application\nName=Worklog\nComment=AI work journal\nExec="${escaped}" --hidden\nTerminal=false\nX-GNOME-Autostart-enabled=true\n`, { mode: 0o600 });
 }
@@ -111,6 +116,10 @@ async function createDesktop() {
     webPreferences: { contextIsolation: true, nodeIntegration: false, sandbox: true },
   });
   window.on("close", event => { if (!quitting) { event.preventDefault(); window.hide(); } });
+  window.webContents.session.setPermissionRequestHandler((_webContents, _permission, callback) => callback(false));
+  window.webContents.on("will-navigate", (event, url) => {
+    if (!url.startsWith(`${endpoint}/`) && url !== endpoint) { event.preventDefault(); if (url.startsWith("https://") || url.startsWith("http://")) void shell.openExternal(url); }
+  });
   window.webContents.setWindowOpenHandler(({ url }) => {
     if (url.startsWith("https://") || url.startsWith("http://")) void shell.openExternal(url);
     return { action: "deny" };

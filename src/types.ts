@@ -20,6 +20,9 @@ export type Settings = {
   teamsAutoRecord: boolean;
   whisperCliPath: string;
   whisperModelPath: string;
+  retentionEnabled: boolean;
+  evidenceRetentionDays: number;
+  meetingAudioRetentionDays: number;
 };
 
 export type Secrets = { llmApiKey: string };

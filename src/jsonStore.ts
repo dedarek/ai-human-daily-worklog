@@ -1,4 +1,6 @@
-import { readFile, writeFile } from "node:fs/promises";
+import { randomUUID } from "node:crypto";
+import { dirname } from "node:path";
+import { mkdir, open, readFile, rename, stat, unlink, writeFile } from "node:fs/promises";
 
 // 通用串行工具：保证同一 key 上的异步任务按提交顺序依次执行，避免并发写覆盖。
 export function createMutex() {
@@ -18,16 +20,49 @@ function lockFor(path: string) {
 }
 
 export async function readJson<T>(path: string, fallback: T): Promise<T> {
-  try { return JSON.parse(await readFile(path, "utf8")) as T; }
-  catch { return fallback; }
+  let raw: string;
+  try { raw = await readFile(path, "utf8"); }
+  catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") return fallback;
+    throw error;
+  }
+  try { return JSON.parse(raw) as T; }
+  catch (error) { throw new Error(`状态文件已损坏，已停止覆盖：${path}`, { cause: error }); }
+}
+
+export async function atomicWriteFile(path: string, content: string | Buffer, mode = 0o600) {
+  await mkdir(dirname(path), { recursive: true, mode: 0o700 });
+  const temporary = `${path}.${process.pid}.${randomUUID()}.tmp`;
+  await writeFile(temporary, content, { mode });
+  const handle = await open(temporary, "r+");
+  try { await handle.sync(); } finally { await handle.close(); }
+  await rename(temporary, path);
+}
+
+async function withFileLock<T>(path: string, action: () => Promise<T>) {
+  const lock = `${path}.lock`;
+  const deadline = Date.now() + 10_000;
+  while (true) {
+    try {
+      const handle = await open(lock, "wx", 0o600);
+      try { return await action(); }
+      finally { await handle.close(); await unlink(lock).catch(() => {}); }
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== "EEXIST") throw error;
+      const age = await stat(lock).then(info => Date.now() - info.mtimeMs).catch(() => 0);
+      if (age > 60_000) { await unlink(lock).catch(() => {}); continue; }
+      if (Date.now() >= deadline) throw new Error(`状态文件正被另一个 Worklog 进程占用：${path}`);
+      await new Promise(resolve => setTimeout(resolve, 40));
+    }
+  }
 }
 
 // 读-改-写在 per-path 串行锁内完成，杜绝 published/wiki-index/meetings 的丢失更新。
 export function updateJson<T>(path: string, fallback: T, mutator: (data: T) => T | Promise<T>): Promise<T> {
-  return lockFor(path)(async () => {
+  return lockFor(path)(() => withFileLock(path, async () => {
     const data = await readJson(path, fallback);
     const next = await mutator(data);
-    await writeFile(path, JSON.stringify(next, null, 2), { mode: 0o600 });
+    await atomicWriteFile(path, JSON.stringify(next, null, 2));
     return next;
-  });
+  }));
 }

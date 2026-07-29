@@ -27,7 +27,8 @@ test("report trace keeps claims linked to local evidence", async () => {
   const trace = buildReportTrace("2026-07-30", "# 日报\n\n## 项目进展\n\n完成 Windows 安装器测试并提交代码。", activities, graph);
   assert.equal(trace.claims.length, 1);
   assert.ok(trace.claims[0].evidenceIds.length > 0);
-  assert.ok(trace.claims[0].confidence > 0.45);
+  assert.ok(trace.claims[0].confidence > 0.25);
+  assert.ok(trace.claims[0].confidence <= 0.74);
 });
 
 test("gap detector asks no more than two focused questions", async () => {
@@ -36,7 +37,7 @@ test("gap detector asks no more than two focused questions", async () => {
   assert.ok(detectEvidenceGaps(graph).length <= 2);
 });
 
-test("accepted corrections teach aliases, exclusions and section length locally", () => {
+test("accepted corrections teach aliases and section length without permanently suppressing a deleted project", () => {
   const learned = applyCorrectionPreferences(
     emptyPreferences(),
     "# 日报\n\n## 项目进展\n\n### 临时项目\n\n无价值内容。\n\n### Worklog\n\n完成构建。",
@@ -44,6 +45,6 @@ test("accepted corrections teach aliases, exclusions and section length locally"
     { "mac-worklog-feishu": "Worklog" },
   );
   assert.equal(learned.projectAliases["mac-worklog-feishu"], "Worklog");
-  assert.ok(learned.ignoredPatterns.includes("临时项目"));
+  assert.equal(learned.ignoredPatterns.includes("临时项目"), false);
   assert.ok((learned.sectionTargets["项目进展"] || 0) > 0);
 });

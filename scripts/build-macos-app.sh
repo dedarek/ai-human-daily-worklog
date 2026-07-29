@@ -76,6 +76,7 @@ for arch in arm64 x64; do
   [[ -d "$directory" ]] || tar -xzf "$archive" -C "$CACHE"
 done
 lipo -create "$CACHE/node-v$NODE_VERSION-darwin-arm64/bin/node" "$CACHE/node-v$NODE_VERSION-darwin-x64/bin/node" -output "$RESOURCES/runtime/node"
+/usr/bin/strip -S "$RESOURCES/runtime/node"
 
 cp -R "$ROOT/dist" "$ROOT/public" "$ROOT/package.json" "$ROOT/package-lock.json" "$RESOURCES/server/"
 (cd "$RESOURCES/server" && npm ci --omit=dev --ignore-scripts --no-audit --no-fund)
@@ -103,6 +104,12 @@ if command -v qlmanage >/dev/null; then
 fi
 
 chmod +x "$MACOS/Worklog" "$RESOURCES/runtime/node" "$RESOURCES/bin/"*
+if [[ "${WORKLOG_SKIP_ADHOC_SIGN:-0}" != "1" ]]; then
+  codesign --force --options runtime --timestamp=none --sign - --entitlements "$ROOT/macos/Node.entitlements" "$RESOURCES/runtime/node"
+  for binary in "$RESOURCES/bin/"*; do codesign --force --options runtime --timestamp=none --sign - "$binary"; done
+  codesign --force --options runtime --timestamp=none --sign - --entitlements "$ROOT/macos/Worklog.entitlements" "$APP"
+  codesign --verify --deep --strict "$APP"
+fi
 echo "$APP"
 lipo -archs "$MACOS/Worklog"
 lipo -archs "$RESOURCES/runtime/node"

@@ -1,9 +1,9 @@
-import { mkdir, readdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, readdir, readFile, stat } from "node:fs/promises";
 import { existsSync } from "node:fs";
-import { basename, join } from "node:path";
+import { join } from "node:path";
 import { createHash } from "node:crypto";
 import { dataDir } from "./store.js";
-import { readJson, updateJson } from "./jsonStore.js";
+import { readJson, updateJson, atomicWriteFile } from "./jsonStore.js";
 import type { Activity, ArtifactType, EvidenceClaim, GapQuestion, ReportTrace, WorkArtifact, WorkChain, WorkGraph, WorkProject } from "./types.js";
 
 export type WorkPreferences = {
@@ -56,7 +56,7 @@ function artifactFrom(activity: Activity, projectId: string): WorkArtifact | nul
   const reference = text.match(/https?:\/\/\S+/)?.[0]?.replace(/[),，。]+$/, "") || text.match(/[0-9a-f]{7,40}/i)?.[0];
   return {
     id: id("artifact", `${activity.evidenceId}|${type}`), type, title: text.slice(0, 240), timestamp: activity.timestamp,
-    projectId, evidenceIds: [activity.evidenceId], verified: /(?:通过|成功|完成|已发布|已合并|uploaded|success)/i.test(text) || type === "commit", reference,
+    projectId, evidenceIds: [activity.evidenceId], verified: /(?:通过|成功|完成|已发布|已合并|uploaded|success|committed|created commit)/i.test(text), reference,
   };
 }
 
@@ -104,7 +104,7 @@ export async function buildWorkGraph(date: string, activities: Activity[], prefe
     const candidates = directHints.flatMap((hint, candidateIndex) => {
       if (!hint) return [];
       const distance = Math.abs(new Date(ordered[candidateIndex].timestamp).getTime() - at);
-      return distance <= 2 * 60 * 60 * 1000 ? [{ hint, distance, directionPenalty: candidateIndex < index ? 0 : 1 }] : [];
+      return distance <= 30 * 60 * 1000 ? [{ hint, distance, directionPenalty: candidateIndex < index ? 0 : 1 }] : [];
     }).sort((a, b) => a.distance - b.distance || a.directionPenalty - b.directionPenalty);
     return candidates[0]?.hint || "";
   });
@@ -128,7 +128,7 @@ export async function buildWorkGraph(date: string, activities: Activity[], prefe
   const graph = { date, generatedAt: new Date().toISOString(), projects, unassignedEvidenceIds: unassigned };
   if (persist) {
     const directory = join(dataDir, "work-graphs"); await mkdir(directory, { recursive: true });
-    await writeFile(join(directory, `${date}.json`), JSON.stringify(graph, null, 2), { mode: 0o600 });
+    await atomicWriteFile(join(directory, `${date}.json`), JSON.stringify(graph, null, 2));
   }
   return graph;
 }
@@ -156,11 +156,12 @@ export function buildReportTrace(date: string, report: string, activities: Activ
     if (/^#{1,3}\s/.test(block)) { section = block.replace(/^#+\s*/, ""); continue; }
     for (const line of block.split(/\n/).map(value => value.replace(/^[-*]\s+/, "").trim()).filter(Boolean)) {
       const ranked = activities.map(activity => ({ activity, score: similarity(line, activity.message) })).sort((a, b) => b.score - a.score);
-      const selected = ranked.filter(item => item.score >= 0.08).slice(0, 4);
+      const selected = ranked.filter(item => item.score >= 0.18).slice(0, 4);
       const evidenceIds = selected.map(item => item.activity.evidenceId);
       const project = evidenceIds.map(evidenceId => projectByEvidence.get(evidenceId)).find(Boolean);
       const best = selected[0]?.score ?? 0;
-      const confidence = Math.min(0.98, evidenceIds.length ? 0.45 + best * 0.35 + Math.min(0.15, evidenceIds.length * 0.04) : 0.18);
+      // 这里只能表达词汇层面的证据匹配，不能冒充事实蕴含或真实性评分。
+      const confidence = Math.min(0.74, evidenceIds.length ? 0.28 + best * 0.35 + Math.min(0.1, evidenceIds.length * 0.025) : 0.08);
       claims.push({ id: id("claim", `${date}|${section}|${line}`), section, text: line, projectId: project?.id, evidenceIds, confidence: Number(confidence.toFixed(2)) });
     }
   }
@@ -188,19 +189,17 @@ function sectionLengths(markdown: string) {
   return result;
 }
 
-export function applyCorrectionPreferences(preferences: WorkPreferences, original: string, edited: string, aliases: Record<string, string> = {}): WorkPreferences {
+export function applyCorrectionPreferences(preferences: WorkPreferences, _original: string, edited: string, aliases: Record<string, string> = {}): WorkPreferences {
     const targets = sectionLengths(edited);
     const sectionTargets = { ...preferences.sectionTargets };
     for (const [section, length] of Object.entries(targets)) {
       const previous = sectionTargets[section];
       sectionTargets[section] = previous ? Math.round(previous * 0.7 + length * 0.3) : length;
     }
-    const originalProjects = new Set([...original.matchAll(/^###\s+(.+)$/gm)].map(match => match[1].trim()));
-    const editedProjects = new Set([...edited.matchAll(/^###\s+(.+)$/gm)].map(match => match[1].trim()));
-    const removed = [...originalProjects].filter(name => !editedProjects.has(name) && name.length >= 2);
     return {
       projectAliases: { ...preferences.projectAliases, ...aliases },
-      ignoredPatterns: [...new Set([...preferences.ignoredPatterns, ...removed])].slice(-100),
+      // 删除某一段可能只是当天不重要，不能据此永久屏蔽整个项目。
+      ignoredPatterns: preferences.ignoredPatterns,
       sectionTargets,
       learnedAt: new Date().toISOString(),
     };
@@ -222,35 +221,48 @@ export async function loadWorkGraph(date: string) {
 
 export async function saveReportTrace(trace: ReportTrace) {
   const directory = join(dataDir, "report-traces"); await mkdir(directory, { recursive: true });
-  await writeFile(join(directory, `${trace.date}.json`), JSON.stringify(trace, null, 2), { mode: 0o600 });
+  await atomicWriteFile(join(directory, `${trace.date}.json`), JSON.stringify(trace, null, 2));
 }
 
 export async function loadReportTrace(date: string) {
   return readJson<ReportTrace | null>(join(dataDir, "report-traces", `${date}.json`), null);
 }
 
-export type ArchiveSearchResult = { id: string; date: string; source: "report" | "project" | "evidence"; title: string; snippet: string; score: number; evidenceIds: string[]; path: string };
+export type ArchiveSearchResult = { id: string; date: string; source: "report" | "project"; title: string; snippet: string; score: number; evidenceIds: string[]; path: string };
+
+type IndexedArchive = Omit<ArchiveSearchResult, "score" | "snippet"> & { content: string };
+let archiveCache: { signature: string; entries: IndexedArchive[] } | null = null;
+
+async function archiveEntries() {
+  const reportDir = join(dataDir, "reports"), graphDir = join(dataDir, "work-graphs");
+  const files = [
+    ...((existsSync(reportDir) ? await readdir(reportDir) : []).filter(name => name.endsWith(".md")).map(name => ({ source: "report" as const, name, path: join(reportDir, name) }))),
+    ...((existsSync(graphDir) ? await readdir(graphDir) : []).filter(name => name.endsWith(".json")).map(name => ({ source: "project" as const, name, path: join(graphDir, name) }))),
+  ];
+  const signature = (await Promise.all(files.map(async file => `${file.path}:${(await stat(file.path)).mtimeMs}`))).join("|");
+  if (archiveCache?.signature === signature) return archiveCache.entries;
+  const entries: IndexedArchive[] = [];
+  for (const file of files) {
+    if (file.source === "report") {
+      const content = await readFile(file.path, "utf8");
+      entries.push({ id: id("search", file.path), date: file.name.match(/\d{4}-\d{2}-\d{2}/)?.[0] || file.name, source: "report", title: content.match(/^#\s+(.+)$/m)?.[1] || file.name, evidenceIds: [], path: file.path, content });
+    } else {
+      const graph = JSON.parse(await readFile(file.path, "utf8")) as WorkGraph;
+      for (const project of graph.projects) entries.push({ id: id("search", `${file.path}|${project.id}`), date: graph.date, source: "project", title: project.name, evidenceIds: project.evidenceIds.slice(0, 20), path: file.path, content: `${project.name} ${project.chains.map(chain => `${chain.title}：${chain.outcome}`).join("；")}` });
+    }
+  }
+  archiveCache = { signature, entries };
+  return entries;
+}
 
 export async function searchArchive(query: string, limit = 12): Promise<ArchiveSearchResult[]> {
   const clean = query.trim(); if (!clean) return [];
   const results: ArchiveSearchResult[] = [];
-  const reportDir = join(dataDir, "reports");
-  if (existsSync(reportDir)) for (const name of await readdir(reportDir)) {
-    if (!name.endsWith(".md")) continue;
-    const path = join(reportDir, name); const content = await readFile(path, "utf8"); const score = similarity(clean, content);
-    if (score > 0) {
-      const lines = content.split("\n").filter(line => similarity(clean, line) > 0).slice(0, 3);
-      results.push({ id: id("search", path), date: name.match(/\d{4}-\d{2}-\d{2}/)?.[0] || name, source: "report", title: content.match(/^#\s+(.+)$/m)?.[1] || name, snippet: lines.join(" ").slice(0, 500), score, evidenceIds: [], path });
-    }
-  }
-  const graphDir = join(dataDir, "work-graphs");
-  if (existsSync(graphDir)) for (const name of await readdir(graphDir)) {
-    if (!name.endsWith(".json")) continue;
-    const path = join(graphDir, name); const graph = JSON.parse(await readFile(path, "utf8")) as WorkGraph;
-    for (const project of graph.projects) {
-      const content = `${project.name} ${project.chains.map(chain => `${chain.title} ${chain.outcome}`).join(" ")}`; const score = similarity(clean, content);
-      if (score > 0) results.push({ id: id("search", `${path}|${project.id}`), date: graph.date, source: "project", title: project.name, snippet: project.chains.map(chain => `${chain.title}：${chain.outcome}`).join("；").slice(0, 500), score: score + 0.1, evidenceIds: project.evidenceIds.slice(0, 20), path });
-    }
+  for (const entry of await archiveEntries()) {
+    const score = similarity(clean, entry.content); if (score <= 0) continue;
+    const lines = entry.content.split("\n").filter(line => similarity(clean, line) > 0).slice(0, 3);
+    const { content, ...metadata } = entry;
+    results.push({ ...metadata, snippet: (lines.join(" ") || content).slice(0, 500), score: score + (entry.source === "project" ? 0.1 : 0) });
   }
   return results.sort((a, b) => b.score - a.score).slice(0, limit).map(item => ({ ...item, score: Number(item.score.toFixed(3)) }));
 }

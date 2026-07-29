@@ -30,8 +30,15 @@ struct SystemAudioCapture {
                 fputs("没有找到可用于系统音频采集的显示器。\n", stderr)
                 exit(3)
             }
-
-            let filter = SCContentFilter(display: display, excludingApplications: [], exceptingWindows: [])
+            let teams = content.applications.filter { application in
+                application.bundleIdentifier.localizedCaseInsensitiveContains("microsoft.teams")
+            }
+            guard !teams.isEmpty else {
+                fputs("没有找到正在运行的 Microsoft Teams 音频进程。\n", stderr)
+                exit(4)
+            }
+            // 仅包含 Teams 进程，避免把通知、音乐或其他应用的系统声音混入会议。
+            let filter = SCContentFilter(display: display, including: teams, exceptingWindows: [])
             let configuration = SCStreamConfiguration()
             configuration.capturesAudio = true
             if #available(macOS 15.0, *) { configuration.captureMicrophone = false }
@@ -46,7 +53,7 @@ struct SystemAudioCapture {
             try stream.addStreamOutput(output, type: .audio, sampleHandlerQueue: DispatchQueue(label: "worklog.system-audio"))
             try await stream.startCapture()
 
-            // 原始 16 kHz / 单声道 / Int16 PCM 持续写到 stdout，由 FFmpeg 封装成 WAV。
+            // 原始 16 kHz / 单声道 / Int16 PCM 持续写到 stdout，由 Worklog 封装成 WAV。
             while true {
                 try await Task.sleep(for: .seconds(60))
             }

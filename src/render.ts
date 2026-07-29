@@ -94,20 +94,11 @@ function calloutXml(body: string, emoji: string, bg: string, border: string): st
   return `<callout emoji="${emoji}" background-color="${bg}" border-color="${border}"><p>${esc(text)}</p></callout>`;
 }
 
-function checkboxXml(body: string): string {
-  const lines = body.split("\n").map(l => l.replace(/^[-*]\s+/, "").trim()).filter(Boolean);
-  if (!lines.length) return bodyToXml(body);
-  // 明确「无」类占位不渲染成待办勾选框。
-  if (lines.length === 1 && /^(无|暂无|未明确|无待办)/.test(lines[0])) return bodyToXml(body);
-  return lines.map(line => `<checkbox done="false">${esc(line)}</checkbox>`).join("");
-}
-
 export type RenderOpts = {
   title?: string;
   header?: string;
   calloutHeadings?: string[];
   tableHeadings?: string[];
-  checkboxHeadings?: string[];
 };
 
 export function renderDocXml(markdown: string, opts: RenderOpts = {}): string {
@@ -117,12 +108,10 @@ export function renderDocXml(markdown: string, opts: RenderOpts = {}): string {
   if (opts.header) parts.push(calloutXml(opts.header, "📌", "light-blue", "blue"));
   const isCallout = new Set(opts.calloutHeadings ?? []);
   const isTable = new Set(opts.tableHeadings ?? []);
-  const isCheckbox = new Set(opts.checkboxHeadings ?? []);
   for (const section of sections) {
     parts.push(`<h2>${esc(section.heading)}</h2>`);
     if (isCallout.has(section.heading)) parts.push(calloutXml(section.body, "💡", "light-yellow", "yellow"));
     else if (isTable.has(section.heading)) parts.push(statusTableXml(section.body));
-    else if (isCheckbox.has(section.heading)) parts.push(checkboxXml(section.body));
     else parts.push(bodyToXml(section.body));
   }
   return parts.join("\n");
@@ -148,13 +137,5 @@ export function summaryXml(markdown: string, meta: { label: string; title?: stri
     header: `周期：${meta.label}`,
     calloutHeadings: ["本期概览"],
     tableHeadings: ["本期状态"],
-  });
-}
-
-export function meetingXml(markdown: string, title?: string): string {
-  return renderDocXml(markdown, {
-    title,
-    calloutHeadings: ["会议概览"],
-    checkboxHeadings: ["待办事项"],
   });
 }

@@ -24,7 +24,7 @@ Worklog 在你的电脑上汇合 Agent、终端、应用与会议留下的工作
 </div>
 
 > [!NOTE]
-> Worklog v0.3 是 macOS、Windows 与 Linux 的跨平台公开预览版。三端共享 Agent 采集、前台应用、自动报告、飞书归档与本地 Markdown；Teams 系统音频目前仅在 macOS 可用。
+> Worklog v0.4 是 macOS、Windows 与 Linux 的跨平台公开预览版。三端共享 Agent 采集、前台应用、自动报告、飞书归档与本地 Markdown；Teams 应用音频目前仅在 macOS 可用。
 
 ## 为什么需要它
 
@@ -156,7 +156,7 @@ flowchart LR
 <sub>¹ Linux X11 使用 `xdotool`；KDE Wayland 使用 `kdotool`。其他 Wayland 桌面的 Agent 日志与报告功能仍可使用，但前台窗口采集可能受桌面安全策略限制。</sub>
 
 > [!WARNING]
-> “支持”和“已经完成实机端到端验收”不是一回事。v0.3 的三系统核心测试和原生安装包构建均已通过；Windows/Linux 的交互安装、托盘、自动启动、凭据持久化、前台窗口采集和飞书实际发布仍需实机验收。完整状态见 [兼容性与验证矩阵](docs/COMPATIBILITY.md)。在这些检查完成前，Windows/Linux 版本应标记为 **Preview**。
+> “支持”和“已经完成实机端到端验收”不是一回事。v0.4 的三系统核心测试和原生安装包构建均已通过；Windows/Linux 的交互安装、托盘、自动启动、凭据持久化、前台窗口采集和飞书实际发布仍需实机验收。完整状态见 [兼容性与验证矩阵](docs/COMPATIBILITY.md)。在这些检查完成前，Windows/Linux 版本应标记为 **Preview**。
 
 ## 快速开始
 
@@ -195,7 +195,7 @@ chmod +x Worklog-*-Linux-x86_64.AppImage
 
 ### 从源码运行
 
-源码开发需要 Node.js 20+ 和 [飞书 CLI](https://open.feishu.cn/document/no_class/mcp-archive/feishu-cli-installation-guide.md)。macOS 会议能力还需要 Xcode Command Line Tools。
+源码开发需要 Node.js 22.5+ 和 [飞书 CLI](https://open.feishu.cn/document/no_class/mcp-archive/feishu-cli-installation-guide.md)。macOS 会议能力还需要 Xcode Command Line Tools。
 
 ```bash
 git clone https://github.com/dedarek/ai-human-daily-worklog.git
@@ -260,6 +260,8 @@ Worklog 是一个 **local-first** 项目，而不是一个云端监控服务。
 - 原始会议音频不会发送给 LLM，也不会上传飞书；
 - 只有经过过滤与脱敏的工作证据、会议文本会发送给你配置的 LLM；
 - 本机数据、配置与密钥均被 Git 忽略。
+- 本地接口校验 Host、Origin、内容类型和写请求标记，阻断普通网页跨站触发；状态文件使用原子写入和跨进程锁；
+- 可在设置中启用自动保留策略，分别控制操作证据和已处理会议音频的保存天数。为避免升级后未经确认删除历史录音，已有安装默认保持关闭。
 
 > [!IMPORTANT]
 > 「本地优先」不代表报告生成完全离线。启用远程 LLM 后，生成所需的文本证据会发往你配置的服务商。请根据其数据政策决定是否启用或增加脱敏规则。
@@ -412,7 +414,8 @@ Worklog 的目标不只是生成一份日报，而是成为 AI 时代个人可�
 
 - [x] 可配置的敏感信息识别与脱敏：密钥、客户名、仓库名、路径和自定义词表
 - [ ] 应用、项目、时间段与会议级别的允许/排除规则
-- [ ] 原始记录自动清理策略，以及「只保留摘要、不保留原文」模式
+- [x] 原始记录与已处理会议音频的可配置自动清理策略
+- [ ] 「只保留摘要、不保留原文」模式
 - [ ] 本地数据库加密和可选的报告端到端加密备份
 - [ ] 支持 Ollama、MLX、llama.cpp 等完全本地的 LLM
 - [ ] 在本地完成嵌入与检索，远程模型只接收最少必要上下文
