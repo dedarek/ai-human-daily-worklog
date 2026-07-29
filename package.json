@@ -27,8 +27,8 @@
     "release-dmg": "./scripts/release-dmg.sh",
     "install-service": "./scripts/install-launch-agent.sh",
     "desktop": "npm run build && electron .",
-    "build-windows": "npm run build && electron-builder --win nsis --x64",
-    "build-linux": "npm run build && electron-builder --linux AppImage deb --x64"
+    "build-windows": "npm run build && electron-builder --win nsis --x64 --publish never",
+    "build-linux": "npm run build && electron-builder --linux AppImage deb --x64 --publish never"
   },
   "engines": {
     "node": ">=20"
