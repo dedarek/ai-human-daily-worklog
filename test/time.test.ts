@@ -1,6 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { dateAdd, workdays, previousMonth, isoDate, inHourWindow } from "../src/time.js";
+import { previousWorkWeek } from "../src/scheduler.js";
 
 test("dateAdd 跨月与跨年", () => {
   assert.equal(dateAdd("2024-02-28", 1), "2024-02-29");
@@ -35,4 +36,9 @@ test("inHourWindow 判定工作时间窗", () => {
   assert.equal(inHourWindow(at(7, 59), "Asia/Shanghai", 8, 18), false);
   assert.equal(inHourWindow(at(18, 1), "Asia/Shanghai", 8, 18), false);
   assert.equal(inHourWindow("not-a-date", "Asia/Shanghai", 8, 18), false);
+});
+
+test("previousWorkWeek 在周中和周一都指向上周一到周五", () => {
+  assert.deepEqual(previousWorkWeek("2024-06-05", "Asia/Shanghai"), { start: "2024-05-27", end: "2024-05-31" });
+  assert.deepEqual(previousWorkWeek("2024-06-03", "Asia/Shanghai"), { start: "2024-05-27", end: "2024-05-31" });
 });
