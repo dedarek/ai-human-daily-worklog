@@ -32,7 +32,7 @@
     "build-linux": "npm run build && electron-builder --linux AppImage deb --x64 --publish never"
   },
   "engines": {
-    "node": ">=22.5"
+    "node": ">=22.13"
   },
   "dependencies": {
     "@larksuite/cli": "1.0.80",

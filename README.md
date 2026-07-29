@@ -195,7 +195,7 @@ chmod +x Worklog-*-Linux-x86_64.AppImage
 
 ### 从源码运行
 
-源码开发需要 Node.js 22.5+ 和 [飞书 CLI](https://open.feishu.cn/document/no_class/mcp-archive/feishu-cli-installation-guide.md)。macOS 会议能力还需要 Xcode Command Line Tools。
+源码开发需要 Node.js 22.13+ 和 [飞书 CLI](https://open.feishu.cn/document/no_class/mcp-archive/feishu-cli-installation-guide.md)。macOS 会议能力还需要 Xcode Command Line Tools。
 
 ```bash
 git clone https://github.com/dedarek/ai-human-daily-worklog.git
