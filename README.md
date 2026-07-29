@@ -309,7 +309,7 @@ Worklog 的目标不只是生成一份日报，而是成为 AI 时代个人可�
 - [ ] 提供采集器、过滤器、报告模板和发布器插件接口
 - [ ] 增加贡献指南、隐私威胁模型、兼容性矩阵和公开版本计划
 
-如果你希望 Worklog 优先支持某个 Agent、会议平台或归档目的地，欢迎通过 [Issue](https://github.com/dedarek/mac-worklog-feishu/issues) 描述你的工作流，而不只是提交一个工具名称。
+如果你希望 Worklog 优先支持某个 Agent、会议平台或归档目的地，欢迎通过 [Issue](https://github.com/dedarek/ai-human-daily-worklog/issues) 描述你的工作流，而不只是提交一个工具名称。
 
 ## 开发
 
