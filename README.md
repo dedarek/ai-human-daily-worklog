@@ -168,8 +168,8 @@ Worklog 通过 CoreAudio 判断 Teams 是否存在真实音频活动，并使用
 
 ```bash
 brew install ffmpeg whisper-cpp
-mkdir -p data/models
-curl -L -o data/models/ggml-small.bin \
+mkdir -p "$HOME/Library/Application Support/Worklog/models"
+curl -L -o "$HOME/Library/Application Support/Worklog/models/ggml-small.bin" \
   https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-small.bin
 ```
 
@@ -179,7 +179,7 @@ curl -L -o data/models/ggml-small.bin \
 
 Worklog 是一个 **local-first** 项目，而不是一个云端监控服务。
 
-- 原始活动、会议音频、逐字稿、报告副本和飞书索引保存在本机 `data/`；
+- 原始活动、会议音频、逐字稿、报告副本和飞书索引保存在本机 `~/Library/Application Support/Worklog/`；
 - LLM API Key 保存在 macOS Keychain；
 - 原始会议音频不会发送给 LLM，也不会上传飞书；
 - 只有过滤后的工作证据与有效逐字稿会发送给你配置的 LLM；
@@ -248,7 +248,7 @@ Worklog 的目标不只是生成一份日报，而是成为 AI 时代个人可�
 - [ ] 发布同时支持 Apple Silicon 与 Intel 的签名、公证 `.dmg`
 - [ ] 提供菜单栏应用：查看采集状态、暂停记录、手动生成和快速打开当天文档
 - [ ] 将飞书授权、LLM 配置、系统权限、Whisper 模型下载整合进首次启动向导
-- [ ] 将运行数据迁移到标准的 `Application Support/Worklog`，不再依赖源码目录
+- [x] 将运行数据迁移到标准的 `Application Support/Worklog`，不再依赖源码目录
 - [ ] 支持应用内自动更新、版本说明和安全回滚
 - [ ] 在 Mac 睡眠、关机或离线错过任务后自动补跑，并保证同一报告不会重复创建
 - [ ] 提供更清楚的健康检查、失败通知、重试队列与可导出的诊断报告

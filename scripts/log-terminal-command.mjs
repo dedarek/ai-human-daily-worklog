@@ -1,9 +1,10 @@
 import { appendFile, mkdir, readFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { homedir } from "node:os";
 
 const root = dirname(dirname(fileURLToPath(import.meta.url)));
-const dataDir = join(root, "data", "operations");
+const dataDir = join(process.env.WORKLOG_DATA_DIR || join(homedir(), "Library", "Application Support", "Worklog"), "operations");
 const [cwd = "", original = ""] = process.argv.slice(2);
 const redact = (text) => text
   .replace(/(sk-[A-Za-z0-9_-]{8,}|Bearer\s+)[A-Za-z0-9._-]+/gi, "$1[REDACTED]")

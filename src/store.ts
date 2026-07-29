@@ -1,12 +1,15 @@
 import { createHash, randomUUID } from "node:crypto";
 import { execFile } from "node:child_process";
-import { mkdir, readFile, writeFile, appendFile } from "node:fs/promises";
+import { existsSync } from "node:fs";
+import { cp, mkdir, readFile, writeFile, appendFile, readdir } from "node:fs/promises";
 import { promisify } from "node:util";
 import { join } from "node:path";
+import { homedir } from "node:os";
 import type { Secrets, Settings } from "./types.js";
 
 const exec = promisify(execFile);
-export const dataDir = join(process.cwd(), "data");
+const legacyDataDir = join(process.cwd(), "data");
+export const dataDir = process.env.WORKLOG_DATA_DIR || join(homedir(), "Library", "Application Support", "Worklog");
 const settingsFile = join(dataDir, "settings.json");
 const keychainService = "MacWorklogFeishu";
 
@@ -31,7 +34,13 @@ export const defaults: Settings = {
   whisperModelPath: join(dataDir, "models", "ggml-small.bin"),
 };
 
-export async function setupStore() { await mkdir(dataDir, { recursive: true }); }
+export async function setupStore() {
+  await mkdir(dataDir, { recursive: true });
+  if (dataDir === legacyDataDir || existsSync(join(dataDir, ".migration-complete")) || existsSync(join(dataDir, "settings.json"))) return;
+  if (!existsSync(legacyDataDir)) return;
+  for (const entry of await readdir(legacyDataDir)) await cp(join(legacyDataDir, entry), join(dataDir, entry), { recursive: true, force: false, errorOnExist: false });
+  await writeFile(join(dataDir, ".migration-complete"), JSON.stringify({ from: legacyDataDir, migratedAt: new Date().toISOString() }), { mode: 0o600 });
+}
 export async function getSettings(): Promise<Settings> {
   try { return { ...defaults, ...JSON.parse(await readFile(settingsFile, "utf8")) }; }
   catch { return defaults; }
