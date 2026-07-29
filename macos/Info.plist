@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0"><dict>
+  <key>CFBundleDevelopmentRegion</key><string>zh_CN</string>
+  <key>CFBundleDisplayName</key><string>Worklog</string>
+  <key>CFBundleExecutable</key><string>Worklog</string>
+  <key>CFBundleIconFile</key><string>AppIcon</string>
+  <key>CFBundleIdentifier</key><string>com.dedarek.worklog</string>
+  <key>CFBundleInfoDictionaryVersion</key><string>6.0</string>
+  <key>CFBundleName</key><string>Worklog</string>
+  <key>CFBundlePackageType</key><string>APPL</string>
+  <key>CFBundleShortVersionString</key><string>__VERSION__</string>
+  <key>CFBundleVersion</key><string>__BUILD__</string>
+  <key>LSMinimumSystemVersion</key><string>13.0</string>
+  <key>LSUIElement</key><true/>
+  <key>NSAppleEventsUsageDescription</key><string>Worklog 需要读取前台应用与 Teams 会议窗口，用于还原工作上下文。</string>
+  <key>NSScreenCaptureUsageDescription</key><string>Worklog 只采集 Mac 正在播放的系统音频，用于整理 Teams 会议；不会保存屏幕画面或使用麦克风。</string>
+  <key>NSHumanReadableCopyright</key><string>Copyright © 2026 Worklog contributors</string>
+</dict></plist>

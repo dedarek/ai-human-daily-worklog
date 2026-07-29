@@ -1,0 +1,64 @@
+name: Release macOS DMG
+
+on:
+  workflow_dispatch:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  dmg:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+      - run: brew install cmake
+      - run: npm ci
+      - name: Build universal DMG
+        id: package
+        env:
+          CERTIFICATE_BASE64: ${{ secrets.MACOS_CERTIFICATE_BASE64 }}
+          CERTIFICATE_PASSWORD: ${{ secrets.MACOS_CERTIFICATE_PASSWORD }}
+          KEYCHAIN_PASSWORD: ${{ secrets.MACOS_KEYCHAIN_PASSWORD }}
+          SIGN_IDENTITY: ${{ secrets.MACOS_SIGN_IDENTITY }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          APPLE_APP_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
+        run: |
+          set -euo pipefail
+          if [[ -n "$CERTIFICATE_BASE64" && -n "$CERTIFICATE_PASSWORD" && -n "$KEYCHAIN_PASSWORD" && -n "$SIGN_IDENTITY" && -n "$APPLE_ID" && -n "$APPLE_TEAM_ID" && -n "$APPLE_APP_PASSWORD" ]]; then
+            echo "$CERTIFICATE_BASE64" | base64 --decode > certificate.p12
+            security create-keychain -p "$KEYCHAIN_PASSWORD" worklog-build.keychain
+            security set-keychain-settings -lut 21600 worklog-build.keychain
+            security unlock-keychain -p "$KEYCHAIN_PASSWORD" worklog-build.keychain
+            security import certificate.p12 -k worklog-build.keychain -P "$CERTIFICATE_PASSWORD" -T /usr/bin/codesign
+            security list-keychains -d user -s worklog-build.keychain login.keychain-db
+            security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$KEYCHAIN_PASSWORD" worklog-build.keychain
+            xcrun notarytool store-credentials WorklogNotary --apple-id "$APPLE_ID" --team-id "$APPLE_TEAM_ID" --password "$APPLE_APP_PASSWORD"
+            NOTARY_PROFILE=WorklogNotary npm run release-dmg
+            echo "signed=true" >> "$GITHUB_OUTPUT"
+          else
+            npm run build-dmg
+            echo "signed=false" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Publish GitHub release
+        if: startsWith(github.ref, 'refs/tags/')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if [[ "${{ steps.package.outputs.signed }}" == "true" ]]; then
+            gh release create "${GITHUB_REF_NAME}" release/*.dmg --generate-notes --title "Worklog ${GITHUB_REF_NAME}"
+          else
+            gh release create "${GITHUB_REF_NAME}" release/*.dmg --prerelease --title "Worklog ${GITHUB_REF_NAME} · Unsigned Preview" --notes $'Universal macOS preview for Apple Silicon and Intel.\n\n⚠️ This build is not notarized by Apple. Drag Worklog into Applications, then right-click it and choose Open the first time. If macOS still blocks it, open System Settings → Privacy & Security and choose Open Anyway.'
+          fi
+      - uses: actions/upload-artifact@v6
+        with:
+          name: Worklog-universal-dmg
+          path: release/*.dmg

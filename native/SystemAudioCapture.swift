@@ -7,6 +7,18 @@ import CoreMedia
 @main
 struct SystemAudioCapture {
     static func main() async {
+        if CommandLine.arguments.contains("--permission-status") {
+            let payload = ["screenCapture": CGPreflightScreenCaptureAccess()]
+            let data = try! JSONSerialization.data(withJSONObject: payload, options: [.sortedKeys])
+            FileHandle.standardOutput.write(data)
+            return
+        }
+        if CommandLine.arguments.contains("--request-permission") {
+            let payload = ["screenCapture": CGPreflightScreenCaptureAccess() || CGRequestScreenCaptureAccess()]
+            let data = try! JSONSerialization.data(withJSONObject: payload, options: [.sortedKeys])
+            FileHandle.standardOutput.write(data)
+            return
+        }
         do {
             guard CGPreflightScreenCaptureAccess() || CGRequestScreenCaptureAccess() else {
                 fputs("需要“屏幕与系统音频录制”权限，无法采集电脑声音。\n", stderr)
@@ -22,7 +34,7 @@ struct SystemAudioCapture {
             let filter = SCContentFilter(display: display, excludingApplications: [], exceptingWindows: [])
             let configuration = SCStreamConfiguration()
             configuration.capturesAudio = true
-            configuration.captureMicrophone = false
+            if #available(macOS 15.0, *) { configuration.captureMicrophone = false }
             configuration.excludesCurrentProcessAudio = true
             configuration.sampleRate = 48_000
             configuration.channelCount = 2

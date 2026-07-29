@@ -24,7 +24,7 @@ Worklog 在你的 Mac 上汇合 Agent、终端、应用与会议留下的工作�
 </div>
 
 > [!NOTE]
-> Worklog 目前是面向 macOS 的公开预览版。签名、公证的 `.dmg` 正在规划中；当前版本从源码安装。
+> Worklog 目前是面向 macOS 的公开预览版。v0.2 提供 Universal 菜单栏应用与首次启动向导；当前 GitHub 下载包未经过 Apple 公证，首次启动需要右键选择「打开」。
 
 ## 为什么需要它
 
@@ -123,18 +123,35 @@ flowchart LR
 - **使用自己的模型**：支持 OpenAI 与 Anthropic 兼容接口，模型和服务商由你决定。
 - **使用自己的飞书身份**：通过官方飞书 CLI 写入知识库，不保存机器人 App Secret。
 - **看得见的自动化**：本地管理页面展示配置、会议状态、最近生成结果与失败重试。
-- **登录后常驻**：由 macOS LaunchAgent 启动和恢复，只监听 `127.0.0.1`。
+- **菜单栏常驻**：直接查看状态、暂停或恢复采集、立即生成日报，并打开当天飞书文档。
+- **登录后自动启动**：使用 macOS 原生登录项启动和恢复，只监听 `127.0.0.1`。
 
 ## 快速开始
 
 ### 环境要求
 
 - macOS 13+
-- Node.js 20+
-- [飞书 CLI](https://open.feishu.cn/document/no_class/mcp-archive/feishu-cli-installation-guide.md)
-- FFmpeg、whisper.cpp 与 GGML Whisper 模型（Teams 会议功能需要）
+- 一个可用的飞书自建应用与知识库页面
+- 一个 OpenAI 或 Anthropic 兼容的 LLM API
 
-### 1 · 启动 Worklog
+### 1 · 安装 Worklog
+
+从 [Releases](https://github.com/dedarek/ai-human-daily-worklog/releases) 下载 `Worklog-*-universal-unsigned.dmg`，打开后把 Worklog 拖入 Applications。安装包同时支持 Apple Silicon 与 Intel，并内置 Node.js、飞书 CLI 和 Universal whisper.cpp；无需另外安装运行环境。
+
+由于当前预览版没有购买 Apple Developer Program，第一次启动时请在 Applications 中右键 Worklog，选择「打开」，再在确认窗口中选择「打开」。如果 macOS 仍然拦截，请前往「系统设置 → 隐私与安全性」选择「仍要打开」。之后可以像普通菜单栏应用一样启动。
+
+首次打开后，向导会依次完成：
+
+1. 屏幕与系统音频录制、辅助功能权限；
+2. 飞书应用配置和用户授权；
+3. LLM、目标知识库和 Whisper Small 模型下载；
+4. 完整性检查与开始运行。
+
+之后 Worklog 常驻菜单栏。退出、暂停记录、手动生成和打开当天文档都不需要终端。
+
+### 从源码运行
+
+源码开发需要 Node.js 20+、Xcode Command Line Tools 和 [飞书 CLI](https://open.feishu.cn/document/no_class/mcp-archive/feishu-cli-installation-guide.md)。
 
 ```bash
 git clone https://github.com/dedarek/ai-human-daily-worklog.git
@@ -146,7 +163,7 @@ npm start
 
 访问 [http://127.0.0.1:4318](http://127.0.0.1:4318)。
 
-### 2 · 登录飞书 CLI
+### 源码模式下登录飞书 CLI
 
 ```bash
 npm install -g @larksuite/cli
@@ -156,7 +173,7 @@ lark-cli auth login --recommend
 lark-cli auth status --json --verify
 ```
 
-### 3 · 完成初始化
+### 源码模式下完成初始化
 
 在 Worklog 页面：
 
@@ -178,8 +195,10 @@ npm run install-service
 
 Worklog 通过 CoreAudio 判断 Teams 是否存在真实音频活动，并使用 macOS ScreenCaptureKit 采集电脑正在播放的声音。窗口标题只辅助识别入会和会议名称，不依赖固定关键词。
 
+`.dmg` 已内置 Universal whisper.cpp，首次向导会下载并校验 Whisper Small 模型。仅从源码运行时需要手动准备依赖：
+
 ```bash
-brew install ffmpeg whisper-cpp
+brew install whisper-cpp
 mkdir -p "$HOME/Library/Application Support/Worklog/models"
 curl -L -o "$HOME/Library/Application Support/Worklog/models/ggml-small.bin" \
   https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-small.bin
@@ -215,8 +234,9 @@ src/
 ├── render.ts         # 飞书富文档渲染
 └── scheduler.ts      # 自动运行计划
 native/               # macOS 音频检测与系统音频采集
+macos/                # 菜单栏应用、权限声明与签名配置
 public/               # 本地管理页面
-scripts/              # 自检与后台服务安装
+scripts/              # 自检、Universal App、DMG 与公证脚本
 test/                 # 单元测试
 ```
 
@@ -259,9 +279,11 @@ Worklog 的目标不只是生成一份日报，而是成为 AI 时代个人可�
 <summary><strong>近期 · 做成真正的 macOS 产品</strong></summary>
 
 
-- [ ] 发布同时支持 Apple Silicon 与 Intel 的签名、公证 `.dmg`
-- [ ] 提供菜单栏应用：查看采集状态、暂停记录、手动生成和快速打开当天文档
-- [ ] 将飞书授权、LLM 配置、系统权限、Whisper 模型下载整合进首次启动向导
+- [x] 建立同时支持 Apple Silicon 与 Intel 的 `.app` / `.dmg` 构建、签名与 Apple 公证发布链路
+- [x] 发布可拖入 Applications 安装的 Universal unsigned preview DMG
+- [ ] 发布首个经过 Developer ID 签名和 Apple 公证的公开 `.dmg`
+- [x] 提供菜单栏应用：查看采集状态、暂停记录、手动生成和快速打开当天文档
+- [x] 将飞书授权、LLM 配置、系统权限、Whisper 模型下载整合进首次启动向导
 - [x] 将运行数据迁移到标准的 `Application Support/Worklog`，不再依赖源码目录
 - [ ] 支持应用内自动更新、版本说明和安全回滚
 - [x] 在 Mac 睡眠、关机或离线错过任务后自动补跑，并保证同一报告不会重复创建
@@ -356,7 +378,25 @@ npm run dev
 npm run check
 npm test
 node --check public/app.js
+
+# 构建 Universal Worklog.app 与本地测试 DMG
+npm run build-app
+npm run build-dmg
 ```
+
+正式发布由 `.github/workflows/release.yml` 完成。仓库需要配置以下 Actions Secrets：
+
+| Secret | 内容 |
+| --- | --- |
+| `MACOS_CERTIFICATE_BASE64` | Developer ID Application `.p12` 的 Base64 内容 |
+| `MACOS_CERTIFICATE_PASSWORD` | 导出 `.p12` 时设置的密码 |
+| `MACOS_KEYCHAIN_PASSWORD` | CI 临时 Keychain 密码 |
+| `MACOS_SIGN_IDENTITY` | `Developer ID Application: … (TEAMID)` 完整名称 |
+| `APPLE_ID` | Apple Developer 账户 |
+| `APPLE_TEAM_ID` | Apple Developer Team ID |
+| `APPLE_APP_PASSWORD` | Apple ID App 专用密码 |
+
+工作流会构建双架构 App、启用 Hardened Runtime、签名所有嵌套可执行文件、提交 Apple 公证、装订公证票据，并把 DMG 上传到 GitHub Release。
 
 ## 致谢
 

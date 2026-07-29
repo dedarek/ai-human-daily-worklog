@@ -1,8 +1,9 @@
 import { randomUUID } from "node:crypto";
-import { execFile, spawn, type ChildProcess, type ChildProcessWithoutNullStreams } from "node:child_process";
-import { existsSync } from "node:fs";
-import { appendFile, mkdir, readFile, writeFile } from "node:fs/promises";
+import { execFile, spawn, type ChildProcess } from "node:child_process";
+import { createReadStream, createWriteStream, existsSync } from "node:fs";
+import { appendFile, mkdir, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { join } from "node:path";
+import { finished, pipeline } from "node:stream/promises";
 import { promisify } from "node:util";
 import { writeMeetingMinutes } from "./llm.js";
 import { dataDir, getSecrets, getSettings, logRun } from "./store.js";
@@ -16,7 +17,6 @@ const exec = promisify(execFile);
 const meetingsFile = join(dataDir, "meetings.json");
 const nativeDetector = join(dataDir, "bin", "teams-audio-status");
 const systemAudioCapture = join(dataDir, "bin", "system-audio-capture");
-const ffmpegCandidates = ["/opt/homebrew/bin/ffmpeg", "/usr/local/bin/ffmpeg", "/usr/bin/ffmpeg"];
 
 type AudioStatus = {
   teamsProcessAudioRunning: boolean;
@@ -34,9 +34,9 @@ type RuntimeStatus = {
 };
 
 let current: MeetingRecord | null = null;
-let recorder: ChildProcessWithoutNullStreams | null = null;
 let audioCapture: ChildProcess | null = null;
-let recorderClosed: Promise<number> | null = null;
+let captureClosed: Promise<number> | null = null;
+let rawAudioPath = "";
 let polling = false;
 let monitorTimer: NodeJS.Timeout | undefined;
 let startSignals = 0;
@@ -108,24 +108,19 @@ function meetingSubject(titles: string[]) {
   );
 }
 
-function ffmpegPath() {
-  const found = ffmpegCandidates.find(path => existsSync(path));
-  if (!found) throw new Error("未找到 FFmpeg，无法录制 Teams 会议音频。");
-  return found;
-}
-
 async function startCapture(audioPath: string) {
   if (!existsSync(systemAudioCapture)) throw new Error("系统音频采集器尚未生成，请重新运行项目安装脚本。");
   const capture = spawn(systemAudioCapture, [], { stdio: ["ignore", "pipe", "pipe"] });
-  const args = ["-hide_banner", "-loglevel", "warning", "-f", "s16le", "-ar", "16000", "-ac", "1", "-i", "pipe:0", "-c:a", "pcm_s16le", "-y", audioPath];
-  const child = spawn(ffmpegPath(), args, { stdio: ["pipe", "pipe", "pipe"] });
-  capture.stdout?.pipe(child.stdin);
-  let stderr = "", captureError = "";
-  child.stderr.on("data", chunk => stderr = (stderr + chunk).slice(-8000));
-  capture.stderr?.on("data", chunk => captureError = (captureError + chunk).slice(-8000));
-  recorderClosed = new Promise((resolve, reject) => {
-    child.once("error", reject);
-    child.once("close", code => code === null || code === 0 || code === 255 ? resolve(code ?? 0) : reject(new Error(stderr.trim() || `FFmpeg 退出码 ${code}`)));
+  rawAudioPath = `${audioPath}.pcm`;
+  const output = createWriteStream(rawAudioPath, { mode: 0o600 });
+  capture.stdout!.pipe(output);
+  let captureError = "";
+  capture.stderr!.on("data", chunk => captureError = (captureError + chunk).slice(-8000));
+  captureClosed = new Promise((resolve, reject) => {
+    capture.once("error", reject);
+    capture.once("close", code => {
+      void finished(output).then(() => code === null || code === 0 || code === 15 ? resolve(code ?? 0) : reject(new Error(captureError.trim() || `系统音频采集器退出码 ${code}`))).catch(reject);
+    });
   });
   try {
     await new Promise<void>((resolve, reject) => {
@@ -135,17 +130,42 @@ async function startCapture(audioPath: string) {
         clearTimeout(timer);
         reject(new Error(captureError.trim() || `系统音频采集器未能启动（退出码 ${code}）`));
       });
-      child.once("error", error => { clearTimeout(timer); reject(error); });
-      child.once("exit", code => { clearTimeout(timer); reject(new Error(stderr.trim() || `录音未能启动（退出码 ${code}）`)); });
     });
   } catch (error) {
     capture.kill("SIGKILL");
-    child.kill("SIGKILL");
-    recorderClosed = null;
+    captureClosed = null;
     throw error;
   }
   audioCapture = capture;
-  recorder = child;
+}
+
+export function wavHeader(dataBytes: number) {
+  const header = Buffer.alloc(44);
+  header.write("RIFF", 0); header.writeUInt32LE(36 + dataBytes, 4); header.write("WAVE", 8);
+  header.write("fmt ", 12); header.writeUInt32LE(16, 16); header.writeUInt16LE(1, 20);
+  header.writeUInt16LE(1, 22); header.writeUInt32LE(16_000, 24); header.writeUInt32LE(32_000, 28);
+  header.writeUInt16LE(2, 32); header.writeUInt16LE(16, 34); header.write("data", 36); header.writeUInt32LE(dataBytes, 40);
+  return header;
+}
+
+async function finalizeWav(rawPath: string, audioPath: string) {
+  const bytes = (await stat(rawPath)).size;
+  await writeFile(audioPath, wavHeader(bytes), { mode: 0o600 });
+  await pipeline(createReadStream(rawPath), createWriteStream(audioPath, { flags: "a" }));
+  await rm(rawPath, { force: true });
+}
+
+export async function peakVolumeDb(audioPath: string) {
+  let peak = 0;
+  let pending: Buffer<ArrayBufferLike> = Buffer.alloc(0);
+  for await (const chunk of createReadStream(audioPath, { start: 44 })) {
+    const incoming = chunk as Buffer;
+    const data = pending.length ? Buffer.concat([pending, incoming]) : incoming;
+    const usable = data.length - (data.length % 2);
+    for (let index = 0; index < usable; index += 2) peak = Math.max(peak, Math.abs(data.readInt16LE(index)));
+    pending = usable < data.length ? data.subarray(usable) : Buffer.alloc(0);
+  }
+  return peak ? 20 * Math.log10(peak / 32768) : -Infinity;
 }
 
 function extractSection(report: string, heading: string) {
@@ -181,8 +201,7 @@ async function transcribeAndPublish(record: MeetingRecord) {
     if (!transcript) {
       if (!existsSync(settings.whisperCliPath)) throw new Error(`未找到本地转写程序：${settings.whisperCliPath}`);
       if (!existsSync(settings.whisperModelPath)) throw new Error(`未找到本地转写模型：${settings.whisperModelPath}`);
-      const { stderr: volumeLog } = await exec(ffmpegPath(), ["-hide_banner", "-i", record.audioPath!, "-af", "volumedetect", "-f", "null", "-"], { timeout: 180_000, maxBuffer: 4 * 1024 * 1024 });
-      const maxVolume = Number(volumeLog.match(/max_volume:\s*(-?[\d.]+)\s*dB/i)?.[1] ?? "-Infinity");
+      const maxVolume = await peakVolumeDb(record.audioPath!);
       if (!Number.isFinite(maxVolume) || maxVolume <= -80) {
         record.status = "ignored";
         record.error = "系统音频全程静音，未纳入日报；会议期间没有捕获到电脑播放的声音。";
@@ -260,15 +279,15 @@ export async function startTeamsMeeting(origin: "automatic" | "manual" = "manual
 }
 
 export async function stopTeamsMeeting() {
-  if (!current || !recorder || !recorderClosed) throw new Error("当前没有正在记录的 Teams 会议。");
+  if (!current || !audioCapture || !captureClosed) throw new Error("当前没有正在记录的 Teams 会议。");
   const record = current; record.endedAt = new Date().toISOString();
   record.durationSeconds = Math.max(0, Math.round((Date.parse(record.endedAt) - Date.parse(record.startedAt)) / 1000));
   record.status = "transcribing"; await saveMeeting(record);
-  audioCapture?.kill("SIGTERM");
-  const terminate = setTimeout(() => recorder?.kill("SIGTERM"), 3000);
-  const forceKill = setTimeout(() => recorder?.kill("SIGKILL"), 8000);
-  try { await recorderClosed; } finally { audioCapture = null; recorder = null; recorderClosed = null; current = null; }
-  clearTimeout(terminate); clearTimeout(forceKill);
+  audioCapture.kill("SIGTERM");
+  const forceKill = setTimeout(() => audioCapture?.kill("SIGKILL"), 8000);
+  try { await captureClosed; await finalizeWav(rawAudioPath, record.audioPath!); }
+  finally { audioCapture = null; captureClosed = null; rawAudioPath = ""; current = null; }
+  clearTimeout(forceKill);
   void transcribeAndPublish(record);
   return record;
 }

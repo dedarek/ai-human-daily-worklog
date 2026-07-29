@@ -1,0 +1,80 @@
+const $ = selector => document.querySelector(selector);
+const notice = message => $("#notice").textContent = message || "";
+
+async function json(url, options) {
+  const response = await fetch(url, options); const body = await response.json();
+  if (!response.ok) throw new Error(body.error || "请求失败"); return body;
+}
+
+const post = (url, body = {}) => json(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+const stateText = (element, ok, yes, no) => { element.textContent = ok ? yes : no; element.className = ok ? "ok" : "warn"; };
+
+async function refresh() {
+  const [status, settings] = await Promise.all([json("/api/onboarding/status"), json("/api/settings")]);
+  stateText($("#screenState"), status.permissions.screenCapture, "已允许", "等待系统授权");
+  stateText($("#accessibilityState"), status.permissions.accessibility, "已允许", "等待系统授权");
+  document.querySelectorAll("[data-permission]").forEach(button => button.disabled = status.permissions[button.dataset.permission === "screen" ? "screenCapture" : "accessibility"]);
+
+  const larkVerified = status.lark?.verified === true && status.lark?.identity === "user";
+  $("#larkReady").classList.toggle("hidden", !larkVerified);
+  $("#larkReady").textContent = larkVerified ? `已连接飞书用户：${status.lark.user?.userName || "已授权用户"}` : "";
+  $("#loginLark").disabled = status.lark?.installed !== true;
+  if (status.larkLogin?.status === "waiting") notice("请在浏览器完成飞书授权，完成后此页面会自动更新。");
+  if (status.larkLogin?.status === "failed") notice(status.larkLogin.error || "飞书授权失败。");
+
+  $("#llmProtocol").value = settings.llmProtocol || "openai";
+  if (!$("#llmBaseUrl").value) $("#llmBaseUrl").value = settings.llmBaseUrl || "";
+  if (!$("#llmModel").value) $("#llmModel").value = settings.llmModel || "";
+
+  const model = status.whisper.model; const download = status.whisper.download;
+  const percent = download.total ? Math.min(100, Math.round(download.received / download.total * 100)) : 0;
+  $("#modelProgress").style.width = `${model.verified ? 100 : percent}%`;
+  $("#downloadModel").disabled = model.verified || download.status === "downloading";
+  $("#modelState").textContent = model.verified ? "已下载并通过完整性校验" : model.verifying ? "模型已存在，正在后台校验完整性…" : download.status === "downloading" ? `正在下载 ${percent}%` : download.status === "failed" ? download.error : status.whisper.cliInstalled ? "转写程序已就绪，模型尚未下载" : "模型尚未下载；转写程序将在安装包中提供";
+
+  const checks = [
+    [status.permissions.screenCapture && status.permissions.accessibility, "系统权限"],
+    [larkVerified, "飞书用户授权"],
+    [status.llmConfigured, "LLM 配置"],
+    [status.wikiConfigured, "知识库位置"],
+    [model.verified && status.whisper.cliInstalled, "本地会议转写"],
+  ];
+  $("#summary").innerHTML = checks.map(([ok, label]) => `<span class="${ok ? "ok" : "warn"}">${ok ? "✓" : "○"} ${label}</span>`).join("　");
+  $("#finishSetup").disabled = !status.complete;
+  const completed = checks.filter(([ok]) => ok).length;
+  document.querySelectorAll("#progress span").forEach((item, index) => item.className = index < Math.ceil(completed / 1.25) ? "done" : index === Math.floor(completed / 1.25) ? "active" : "");
+  return status;
+}
+
+document.querySelectorAll("[data-permission]").forEach(button => button.addEventListener("click", async () => {
+  try { notice("请在 macOS 系统窗口中允许权限…"); await post(`/api/onboarding/permission/${button.dataset.permission}`); await refresh(); }
+  catch (error) { notice(error.message); }
+}));
+
+$("#configureLark").addEventListener("click", async () => {
+  try { notice("正在配置飞书 CLI…"); await post("/api/onboarding/lark-config", { appId: $("#larkAppId").value.trim(), appSecret: $("#larkAppSecret").value }); $("#larkAppSecret").value = ""; notice("飞书应用凭据已保存，请继续授权用户身份。"); await refresh(); }
+  catch (error) { notice(error.message); }
+});
+
+$("#loginLark").addEventListener("click", async () => {
+  try { notice("正在创建飞书授权链接…"); const result = await post("/api/onboarding/lark-login"); window.open(result.verificationUrl, "_blank", "noopener"); notice("已打开飞书授权页面。完成授权后返回这里。"); }
+  catch (error) { notice(error.message); }
+});
+
+$("#saveConfiguration").addEventListener("click", async () => {
+  try {
+    notice("正在保存模型配置并验证知识库…");
+    const current = await json("/api/settings");
+    await post("/api/settings", { ...current, llmProtocol: $("#llmProtocol").value, llmBaseUrl: $("#llmBaseUrl").value.trim(), llmModel: $("#llmModel").value.trim(), llmApiKey: $("#llmApiKey").value });
+    $("#llmApiKey").value = "";
+    await post("/api/wiki-target", { url: $("#wikiUrl").value.trim() });
+    notice("模型与飞书知识库配置完成。"); await refresh();
+  } catch (error) { notice(error.message); }
+});
+
+$("#downloadModel").addEventListener("click", async () => { try { await post("/api/onboarding/model"); notice("模型开始在后台下载，可以继续配置其他步骤。"); await refresh(); } catch (error) { notice(error.message); } });
+$("#refresh").addEventListener("click", () => refresh().catch(error => notice(error.message)));
+$("#finishSetup").addEventListener("click", () => location.href = "/");
+
+refresh().catch(error => notice(error.message));
+setInterval(() => refresh().catch(() => {}), 2500);

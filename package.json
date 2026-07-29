@@ -1,6 +1,6 @@
 {
   "name": "worklog",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "license": "Apache-2.0",
   "repository": "https://github.com/dedarek/ai-human-daily-worklog",
@@ -10,14 +10,21 @@
   "scripts": {
     "dev": "tsx src/server.ts",
     "start": "tsx src/server.ts",
+    "build": "tsc -p tsconfig.build.json",
     "check": "tsc --noEmit",
     "test": "node --import tsx --test test/*.test.ts",
     "doctor": "node scripts/doctor.mjs",
     "build-native": "./scripts/build-native.sh",
+    "build-app": "./scripts/build-macos-app.sh",
+    "build-dmg": "./scripts/build-dmg.sh",
+    "release-dmg": "./scripts/release-dmg.sh",
     "install-service": "./scripts/install-launch-agent.sh"
   },
-  "engines": { "node": ">=20" },
+  "engines": {
+    "node": ">=20"
+  },
   "dependencies": {
+    "@larksuite/cli": "^1.0.79",
     "express": "^5.1.0",
     "node-cron": "^4.2.1"
   },

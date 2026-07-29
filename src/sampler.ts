@@ -1,4 +1,5 @@
 import { execFile } from "node:child_process";
+import { existsSync } from "node:fs";
 import { appendFile, mkdir } from "node:fs/promises";
 import { promisify } from "node:util";
 import { join } from "node:path";
@@ -28,7 +29,10 @@ export async function sampleOperation(settings: Settings): Promise<Operation | n
   if (!isWorkTime(settings.timezone)) return null;
   let observed: { app: string; windowTitle: string };
   try {
-    const { stdout } = await exec("/usr/bin/osascript", ["-l", "JavaScript", "-e", frontmostApp], { timeout: 8000 });
+    const helper = join(dataDir, "bin", "permission-status");
+    const command = existsSync(helper) ? helper : "/usr/bin/osascript";
+    const args = existsSync(helper) ? ["--frontmost"] : ["-l", "JavaScript", "-e", frontmostApp];
+    const { stdout } = await exec(command, args, { timeout: 8000 });
     observed = JSON.parse(stdout) as { app: string; windowTitle: string };
   } catch {
     const { stdout: asn } = await exec("/usr/bin/lsappinfo", ["front"], { timeout: 3000 });

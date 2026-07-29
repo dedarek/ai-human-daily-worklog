@@ -9,7 +9,8 @@ const checks = [];
 const add = (name, ok, detail) => checks.push({ name, ok, detail });
 
 add("Node.js", Number(process.versions.node.split(".")[0]) >= 20, process.version);
-for (const [name, binary] of [["FFmpeg", "/opt/homebrew/bin/ffmpeg"], ["本地转写程序", "/opt/homebrew/bin/whisper-cli"]]) add(name, existsSync(binary), existsSync(binary) ? binary : "未安装");
+const whisperCli = process.env.WORKLOG_BUNDLED_WHISPER_CLI || "/opt/homebrew/bin/whisper-cli";
+add("本地转写程序", existsSync(whisperCli), existsSync(whisperCli) ? whisperCli : "未安装");
 try {
   const version = execFileSync("/bin/zsh", ["-lc", "lark-cli --version"], { encoding: "utf8" }).trim();
   add("飞书 CLI", true, version);
