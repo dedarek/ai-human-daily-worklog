@@ -12,15 +12,15 @@ A successful build is not the same as end-to-end validation.
 
 | Area | macOS | Windows | Linux |
 | --- | --- | --- | --- |
-| TypeScript, 35 unit tests, server smoke test | Passed | Passed | Passed |
+| TypeScript, 43 unit tests, server/API/UI smoke test | Passed | Passed | Passed |
 | Native CI package build | Universal DMG passed | NSIS x64 passed | AppImage/deb x64 passed |
 | Package structure and public artifact type | Verified | Verified as NSIS PE executable | Verified as AppImage/deb |
-| Interactive install and uninstall | Previously exercised; v0.3 regression pending | Pending | Pending |
+| Automated package install/start/uninstall | DMG structure verified | Native runner acceptance workflow added | AppImage/deb native runner acceptance workflow added |
 | Tray/menu actions | Previously exercised; v0.3 regression pending | Pending | Pending |
 | Login/autostart recovery | macOS service path exercised | Pending | Pending across major desktops |
 | Foreground application collection | Validated | Implementation and CI compile passed; interactive validation pending | X11/KDE implementation passed CI; desktop-session validation pending |
 | Feishu CLI login and document creation | Validated | End-to-end validation pending | End-to-end validation pending |
-| LLM credential persistence | Keychain validated | DPAPI implementation passed CI; round-trip validation pending | Secret Service/fallback implementation passed CI; round-trip validation pending |
+| LLM credential persistence | Keychain validated; tests never mutate a developer Keychain | DPAPI round-trip included in native CI | Secret Service/fallback round-trip included in native CI |
 | Teams system-audio capture | Validated | Not supported in v0.3 | Not supported in v0.3 |
 
 ## Linux desktop notes

@@ -2,6 +2,7 @@ export type Settings = {
   schedule: string;
   weeklySchedule: string;
   monthlySchedule: string;
+  morningSchedule: string;
   timezone: string;
   ignoredProcesses: string[];
   capturePaused: boolean;
@@ -30,6 +31,79 @@ export type Activity = {
   category?: string;
   message: string;
   evidenceId: string;
+};
+
+export type ArtifactType = "commit" | "pull_request" | "release" | "document" | "file" | "build" | "test" | "deployment" | "decision";
+
+export type WorkArtifact = {
+  id: string;
+  type: ArtifactType;
+  title: string;
+  timestamp: string;
+  projectId: string;
+  evidenceIds: string[];
+  verified: boolean;
+  reference?: string;
+};
+
+export type WorkChain = {
+  id: string;
+  projectId: string;
+  title: string;
+  intent?: { summary: string; evidenceId: string; timestamp: string };
+  steps: Array<{ summary: string; evidenceId: string; timestamp: string }>;
+  artifacts: WorkArtifact[];
+  outcome: string;
+  status: "verified" | "produced" | "in_progress" | "uncertain";
+  confidence: number;
+};
+
+export type WorkProject = {
+  id: string;
+  name: string;
+  aliases: string[];
+  evidenceIds: string[];
+  artifacts: WorkArtifact[];
+  chains: WorkChain[];
+  firstSeenAt: string;
+  lastSeenAt: string;
+};
+
+export type WorkGraph = {
+  date: string;
+  generatedAt: string;
+  projects: WorkProject[];
+  unassignedEvidenceIds: string[];
+};
+
+export type EvidenceClaim = {
+  id: string;
+  section: string;
+  text: string;
+  projectId?: string;
+  evidenceIds: string[];
+  confidence: number;
+};
+
+export type ReportTrace = { date: string; generatedAt: string; claims: EvidenceClaim[] };
+
+export type GapQuestion = { id: string; projectId: string; question: string; reason: string; evidenceIds: string[] };
+
+export type DailyDraft = {
+  date: string;
+  status: "draft" | "published";
+  version: number;
+  createdAt: string;
+  updatedAt: string;
+  originalReport: string;
+  editedReport: string;
+  graph: WorkGraph;
+  trace: ReportTrace;
+  gaps: GapQuestion[];
+  answers: Record<string, string>;
+  events: number;
+  manifest?: unknown;
+  published?: { documentId?: string; url?: string; title?: string };
 };
 
 export type Operation = { timestamp: string; app: string; windowTitle: string; evidenceId: string };

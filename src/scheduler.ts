@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { getSettings, logRun, dataDir } from "./store.js";
 import { readJson } from "./jsonStore.js";
 import { run, runSummary } from "./reportRunner.js";
+import { createMorningBrief } from "./morningBrief.js";
 import { isoDate, dateAdd, previousMonth, workdays } from "./time.js";
 
 let tasks: ScheduledTask[] = [];
@@ -36,6 +37,9 @@ async function catchUp(now: Date, timezone: string) {
   const minute = Number(new Intl.DateTimeFormat("en-GB", { timeZone: timezone, minute: "2-digit" }).format(now));
   const tasksToRun: Array<() => Promise<unknown>> = [];
 
+  const afterMorning = hour > 8 || (hour === 8 && minute >= 30);
+  if (weekday >= 1 && weekday <= 5 && afterMorning && hasReports(dateAdd(today, -7), dateAdd(today, -1)) && !existsSync(join(dataDir, "briefs", `${today}.md`))) tasksToRun.push(() => createMorningBrief(today, false));
+
   const dailyEnd = hour > 18 || (hour === 18 && minute >= 0);
   if (dailyEnd) {
     for (const date of workdays(dateAdd(today, -7), dateAdd(today, -1))) {
@@ -66,7 +70,7 @@ export async function schedule() {
   for (const task of tasks) task.stop();
   tasks = [];
   const s = await getSettings();
-  for (const [name, expr] of [["日报", s.schedule], ["周报", s.weeklySchedule], ["月报", s.monthlySchedule]] as const) {
+  for (const [name, expr] of [["日报", s.schedule], ["周报", s.weeklySchedule], ["月报", s.monthlySchedule], ["晨间续接", s.morningSchedule]] as const) {
     if (!cron.validate(expr)) throw new Error(`${name}定时规则无效：${expr}，请使用 5 段 cron，例如 10 0 * * *。`);
   }
 
@@ -84,6 +88,11 @@ export async function schedule() {
   tasks.push(cron.schedule(s.monthlySchedule, () => {
     const range = previousMonth(isoDate(new Date(), s.timezone));
     runSummary("monthly", range.start, range.end, false).catch(error => logRun({ status: "failed", kind: "monthly", ...range, error: String(error) }));
+  }, { timezone: s.timezone }));
+
+  tasks.push(cron.schedule(s.morningSchedule, () => {
+    const date = isoDate(new Date(), s.timezone);
+    createMorningBrief(date, false).catch(error => logRun({ status: "failed", kind: "morning", date, error: String(error) }));
   }, { timezone: s.timezone }));
 
   void catchUp(new Date(), s.timezone);

@@ -24,17 +24,21 @@ That gap becomes larger when work is distributed across Agent sessions, sub-agen
 - **Useful uncertainty**: when evidence is insufficient, say so or ask one focused question instead of inventing a conclusion.
 - **Personal archive, not workplace surveillance**: Worklog serves the person doing the work.
 
-## Highest-value unmet needs
+## Product foundations implemented in v0.3
 
-### 1. Project and work graph
+The first local implementation now covers project grouping, intent-to-result chains, artifact detection, claim-level evidence confidence, pre-publish review, correction-based local preferences, focused gap questions, morning continuation, and cited archive search. These are intentionally transparent heuristics backed by local JSON/Markdown data; they are a foundation for deeper integrations, not a claim that project understanding is solved.
+
+## Highest-value product needs
+
+### 1. Deeper project and work graph
 
 Recognize that three Agent sessions, two repositories, a meeting, and a document belong to the same project. Maintain project identity, goals, decisions, artifacts, people, risks, and open threads across days.
 
-### 2. Intent → execution → result chains
+### 2. Richer intent → execution → result chains
 
 Connect the original request to Agent actions, file changes, commits, CI, documents, and final outcomes. This is the difference between “commands were run” and “the release problem was solved and verified.”
 
-### 3. Artifact-first outcome detection
+### 3. Connected artifact-first outcome detection
 
 Treat commits, pull requests, releases, documents, designs, deployments, and resolved issues as first-class work products. Use application activity only as supporting context.
 

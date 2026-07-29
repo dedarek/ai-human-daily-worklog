@@ -4,7 +4,7 @@ import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { resolveWikiTarget } from "./feishu.js";
 import { getLarkStatus } from "./larkCli.js";
-import { run, runSummary } from "./reportRunner.js";
+import { createDailyDraft, getDailyDraft, publishDailyDraft, run, runSummary, updateDailyDraft } from "./reportRunner.js";
 import { schedule } from "./scheduler.js";
 import { dataDir, getSecrets, getSettings, logRun, saveSecrets, saveSettings } from "./store.js";
 import { isoDate } from "./time.js";
@@ -14,6 +14,9 @@ import { getTeamsMeetingStatus, listTeamsMeetings, retryTeamsMeeting, startTeams
 import { beginLarkLogin, configureLark, onboardingStatus, requestPermission, startModelDownload } from "./onboarding.js";
 import { readJson } from "./jsonStore.js";
 import { platformCapabilities } from "./platform.js";
+import { buildWorkGraph, getWorkPreferences, loadReportTrace, loadWorkGraph, searchArchive } from "./workGraph.js";
+import { answerArchiveQuestion } from "./llm.js";
+import { createMorningBrief, getMorningBrief } from "./morningBrief.js";
 
 const legacyKeys = ["feishuAppId", "feishuAppSecret", "feishuFolderToken", "feishuWikiSpaceId", "titlePrefix", "teamsAudioDevice", "teamsMicrophoneDevice"];
 
@@ -96,6 +99,55 @@ export function registerRoutes(app: Express) {
     catch (error) { await logRun({ status: "failed", date, error: String(error) }); res.status(400).json({ error: String(error) }); }
   });
 
+  app.get("/api/work-graph", async (req, res) => {
+    const date = String(req.query.date || isoDate());
+    try {
+      const existing = await loadWorkGraph(date); if (existing) return res.json(existing);
+      const settings = await getSettings(); const { activities } = await readAudit(date, settings);
+      res.json(await buildWorkGraph(date, activities, await getWorkPreferences()));
+    } catch (error) { res.status(400).json({ error: String(error) }); }
+  });
+  app.get("/api/report-trace", async (req, res) => {
+    const date = String(req.query.date || isoDate()); const trace = await loadReportTrace(date);
+    trace ? res.json(trace) : res.status(404).json({ error: "该日期尚无报告证据追溯。" });
+  });
+  app.get("/api/draft", async (req, res) => {
+    const draft = await getDailyDraft(String(req.query.date || isoDate()));
+    draft ? res.json(draft) : res.status(404).json({ error: "该日期尚无预览草稿。" });
+  });
+  app.post("/api/draft", async (req, res) => {
+    const date = String(req.body?.date || isoDate());
+    try { res.json(await createDailyDraft(date, Boolean(req.body?.force), req.body?.answers && typeof req.body.answers === "object" ? req.body.answers : {})); }
+    catch (error) { res.status(400).json({ error: String(error) }); }
+  });
+  app.patch("/api/draft/:date", async (req, res) => {
+    try { res.json(await updateDailyDraft(String(req.params.date), { editedReport: req.body?.editedReport, answers: req.body?.answers, aliases: req.body?.aliases, regenerate: req.body?.regenerate === true })); }
+    catch (error) { res.status(400).json({ error: String(error) }); }
+  });
+  app.post("/api/draft/:date/publish", async (req, res) => {
+    try { res.json(await publishDailyDraft(String(req.params.date))); }
+    catch (error) { res.status(400).json({ error: String(error) }); }
+  });
+  app.get("/api/morning", async (req, res) => {
+    const brief = await getMorningBrief(String(req.query.date || isoDate()));
+    brief ? res.json(brief) : res.status(404).json({ error: "今天尚未生成晨间续接。" });
+  });
+  app.post("/api/morning", async (req, res) => {
+    try { res.json(await createMorningBrief(String(req.body?.date || isoDate()), Boolean(req.body?.force ?? true))); }
+    catch (error) { res.status(400).json({ error: String(error) }); }
+  });
+  app.get("/api/search", async (req, res) => {
+    const query = String(req.query.q || "").trim(); if (!query) return res.status(400).json({ error: "请输入要搜索的问题或关键词。" });
+    res.json({ query, results: await searchArchive(query) });
+  });
+  app.post("/api/search/answer", async (req, res) => {
+    const question = String(req.body?.question || "").trim(); if (!question) return res.status(400).json({ error: "请输入问题。" });
+    try {
+      const results = await searchArchive(question); const settings = await getSettings(); const secrets = await getSecrets();
+      res.json({ question, answer: await answerArchiveQuestion(question, results, settings, secrets), results });
+    } catch (error) { res.status(400).json({ error: String(error) }); }
+  });
+
   app.post("/api/run-summary", async (req, res) => {
     const kind = req.body?.kind === "monthly" ? "monthly" : "weekly";
     const start = String(req.body?.start ?? ""); const end = String(req.body?.end ?? "");
@@ -118,6 +170,7 @@ export function registerRoutes(app: Express) {
       schedule: settings.schedule,
       weeklySchedule: settings.weeklySchedule,
       monthlySchedule: settings.monthlySchedule,
+      morningSchedule: settings.morningSchedule,
       workWindow: "08:00-18:00",
       timezone: settings.timezone,
       dataPath: dataDir,

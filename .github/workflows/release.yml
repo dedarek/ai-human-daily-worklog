@@ -65,6 +65,8 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run build-windows
+      - shell: pwsh
+        run: ./scripts/acceptance-windows.ps1
       - uses: actions/upload-artifact@v6
         with:
           name: Worklog-windows
@@ -80,6 +82,8 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run build-linux
+      - run: sudo apt-get update && sudo apt-get install -y xvfb xdotool libsecret-tools
+      - run: ./scripts/acceptance-linux.sh
       - uses: actions/upload-artifact@v6
         with:
           name: Worklog-linux

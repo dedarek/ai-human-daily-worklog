@@ -18,6 +18,7 @@ export const defaults: Settings = {
   schedule: "0 18 * * 1-5",
   weeklySchedule: "0 8 * * 1",
   monthlySchedule: "10 8 1 * *",
+  morningSchedule: "30 8 * * 1-5",
   timezone: "Asia/Shanghai",
   ignoredProcesses: ["Finder", "Control Center", "Notification Center", "Dock", "loginwindow", "WindowServer", "explorer", "SearchHost", "ShellExperienceHost", "gnome-shell", "plasmashell"],
   capturePaused: false,
