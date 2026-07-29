@@ -12,6 +12,8 @@ const keychainService = "MacWorklogFeishu";
 
 export const defaults: Settings = {
   schedule: "0 18 * * 1-5",
+  weeklySchedule: "0 8 * * 1",
+  monthlySchedule: "10 8 1 * *",
   timezone: "Asia/Shanghai",
   ignoredProcesses: ["Finder", "Control Center", "Notification Center", "Dock", "loginwindow", "WindowServer"],
   llmBaseUrl: "https://api.openai.com/v1",
@@ -20,7 +22,10 @@ export const defaults: Settings = {
   larkCliPath: "",
   feishuBaseUrl: "https://feishu.cn",
   feishuWikiNodeToken: "",
-  titlePrefix: "工作日志",
+  teamsMeetingEnabled: true,
+  teamsAutoRecord: true,
+  whisperCliPath: "/opt/homebrew/bin/whisper-cli",
+  whisperModelPath: join(dataDir, "models", "ggml-small.bin"),
 };
 
 export async function setupStore() { await mkdir(dataDir, { recursive: true }); }

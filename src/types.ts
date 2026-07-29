@@ -1,5 +1,7 @@
 export type Settings = {
   schedule: string;
+  weeklySchedule: string;
+  monthlySchedule: string;
   timezone: string;
   ignoredProcesses: string[];
   llmBaseUrl: string;
@@ -8,7 +10,10 @@ export type Settings = {
   larkCliPath?: string;
   feishuBaseUrl?: string;
   feishuWikiNodeToken?: string;
-  titlePrefix: string;
+  teamsMeetingEnabled: boolean;
+  teamsAutoRecord: boolean;
+  whisperCliPath: string;
+  whisperModelPath: string;
 };
 
 export type Secrets = { llmApiKey: string };
@@ -23,3 +28,22 @@ export type Activity = {
 };
 
 export type Operation = { timestamp: string; app: string; windowTitle: string; evidenceId: string };
+
+export type MeetingRecord = {
+  id: string;
+  provider: "Microsoft Teams";
+  title: string;
+  status: "recording" | "transcribing" | "summarizing" | "included" | "ignored" | "published" | "failed";
+  startedAt: string;
+  endedAt?: string;
+  durationSeconds?: number;
+  origin: "automatic" | "manual";
+  audioPath?: string;
+  transcriptPath?: string;
+  reportPath?: string;
+  transcriptPreview?: string;
+  summaryPreview?: string;
+  documentId?: string;
+  url?: string;
+  error?: string;
+};

@@ -22,6 +22,22 @@ async function fetchPost(url: string, headers: Record<string, string>, payload: 
   return { status: response.status, text: await response.text() };
 }
 
+function openAIResponseText(raw: string) {
+  if (!raw.trimStart().startsWith("data:")) {
+    const body: any = JSON.parse(raw);
+    return body.choices?.[0]?.message?.content as string || "";
+  }
+  let content = "";
+  for (const line of raw.split(/\r?\n/)) {
+    if (!line.startsWith("data:")) continue;
+    const data = line.slice(5).trim();
+    if (!data || data === "[DONE]") continue;
+    const chunk: any = JSON.parse(data);
+    content += chunk.choices?.[0]?.delta?.content ?? chunk.choices?.[0]?.message?.content ?? "";
+  }
+  return content;
+}
+
 async function callModel(prompt: string, settings: Settings, secrets: Secrets, maxTokens = 1800) {
   if (!secrets.llmApiKey) throw new Error("请先在设置中填写 LLM API Key。");
   const base = settings.llmBaseUrl.replace(/\/$/, "");
@@ -33,7 +49,13 @@ async function callModel(prompt: string, settings: Settings, secrets: Secrets, m
   let lastError: any;
   for (let attempt = 1; attempt <= 3; attempt++) {
     try {
-      const payload = { model: settings.llmModel, messages: [{ role: "user", content: prompt }], temperature: 0.2, max_tokens: maxTokens };
+      const payload = {
+        model: settings.llmModel,
+        messages: [{ role: "user", content: prompt }],
+        temperature: 0.2,
+        max_tokens: maxTokens,
+        ...(settings.llmProtocol === "openai" ? { stream: true } : {}),
+      };
       response = settings.llmProtocol === "openai" ? await fetchPost(url, headers, payload) : await curlPost(url, headers, payload);
       break;
     }
@@ -44,41 +66,88 @@ async function callModel(prompt: string, settings: Settings, secrets: Secrets, m
   }
   if (!response) throw new Error(`LLM 网络请求失败（已重试 3 次）：${lastError?.cause?.message ?? lastError?.message ?? String(lastError)}`);
   if (response.status < 200 || response.status >= 300) throw new Error(`LLM 请求失败：${response.status} ${response.text}`);
+  if (settings.llmProtocol === "openai") return openAIResponseText(response.text) || "模型没有返回报告内容。";
   const body: any = JSON.parse(response.text);
-  return settings.llmProtocol === "anthropic"
-    ? body.content?.filter((item: any) => item.type === "text").map((item: any) => item.text).join("\n") || "模型没有返回报告内容。"
-    : body.choices?.[0]?.message?.content as string || "模型没有返回报告内容。";
+  return body.content?.filter((item: any) => item.type === "text").map((item: any) => item.text).join("\n") || "模型没有返回报告内容。";
+}
+
+export async function writeMeetingMinutes(title: string, startedAt: string, endedAt: string, transcript: string, settings: Settings, secrets: Secrets) {
+  const cleanTranscript = transcript.replace(/[\u0000-\u001F\u007F]/g, " ").trim().slice(0, 80_000);
+  if (!cleanTranscript) throw new Error("会议录音中没有识别到可用语音，无法生成纪要。");
+  const time = (iso: string) => new Intl.DateTimeFormat("zh-CN", { timeZone: settings.timezone, hour: "2-digit", minute: "2-digit", hourCycle: "h23" }).format(new Date(iso));
+  const prompt = `你是资深项目负责人。仅依据下面的 Microsoft Teams 会议逐字稿，整理成供当日日报吸收的工作内容。
+
+会议标题：${title}
+本地时间：${time(startedAt)} 至 ${time(endedAt)}
+
+要求：
+1. 按讨论主题归并，不按说话顺序复述，不虚构参会人姓名、决定或待办。
+2. 区分讨论意见、已经明确的结论和明确分配的行动项；无法确认负责人或期限时写“未明确”，不要猜测。
+3. 忽略寒暄、口头语、识别噪声和重复内容。
+4. 不提及录音、转写模型、AI、证据或留痕。
+5. 内容将作为普通工作证据并入日报，不要写“会议信息”、平台、录音时长或独立纪要的发布说明。
+6. 如果逐字稿只有噪声、重复词或无法支撑业务事实，直接输出“无有效会议内容”，不要编造章节。
+7. 只使用以下结构；禁止粗体、斜体、表格、代码、链接和 Markdown 行内标记：
+
+# ${title}
+## 会议概览
+## 讨论内容
+### 真实讨论主题
+## 关键结论与决策
+## 待办事项
+
+逐字稿：
+${cleanTranscript}`;
+  return (await callModel(prompt, settings, secrets, 1800)).trim();
+}
+
+export function sourceSummaryLine(activities: Activity[]) {
+  return [...activities.reduce((map, item) => map.set(item.process, (map.get(item.process) ?? 0) + 1), new Map<string, number>())]
+    .sort((a, b) => b[1] - a[1]).map(([name, count]) => `${name}: ${count} 条`).join("；");
 }
 
 export async function writeReport(date: string, activities: Activity[], settings: Settings, secrets: Secrets, verifiedFacts: string[] = []) {
   if (!secrets.llmApiKey) throw new Error("请先在设置中填写 LLM API Key。");
-  const sourceSummary = [...activities.reduce((map, item) => map.set(item.process, (map.get(item.process) ?? 0) + 1), new Map<string, number>())]
-    .sort((a, b) => b[1] - a[1]).map(([name, count]) => `${name}: ${count} 条`).join("；");
+  const sourceSummary = sourceSummaryLine(activities);
   const seen = new Set<string>(); const groups = new Map<string, Activity[]>();
   for (const x of activities) {
     const key = `${x.process}|${x.message.slice(0, 160)}`;
     if (seen.has(key)) continue; seen.add(key);
     const group = groups.get(x.process) ?? []; group.push(x); groups.set(x.process, group);
   }
-  const quota = (process: string) => process === "Claude Code" ? 14 : process === "Codex" ? 12 : process === "Terminal" ? 8 : 1;
+  // 分两类喂给模型：对话/提问/任务/会议是「做了什么」的真实信号，全量保留；
+  // 工具动作是「怎么做的」流水（rule 2 明确非工作主体），去重后按来源限量，避免撑爆有限上下文。
+  const agentSources = new Set(["Teams Meeting", "Copilot", "ZCode", "Claude Code", "Codex", "Terminal"]);
+  const isConversation = (a: Activity) => a.process === "Teams Meeting" || /^(提问|讨论|任务)[:：]/.test(a.message);
+  const TOOL_CAP = 24;
   const selected: Activity[] = [];
   for (const [process, items] of groups) {
-    const limit = Math.min(quota(process), items.length);
-    if (limit === items.length) selected.push(...items);
-    else for (let i = 0; i < limit; i++) selected.push(items[Math.floor(i * (items.length - 1) / Math.max(1, limit - 1))]);
+    if (agentSources.has(process)) {
+      const convo = items.filter(isConversation);
+      const tools = items.filter(it => !isConversation(it)).slice(0, TOOL_CAP);
+      selected.push(...convo, ...tools);
+    } else {
+      // 非 agent 应用：把不同窗口标题聚合成一行，保留浏览器调研等主题又不淹没核心证据。
+      const titles = [...new Set(items.map(it => it.message.replace(/^前台窗口：/, "").trim()).filter(t => t && t !== "前台应用处于活跃状态"))].slice(0, 12);
+      selected.push({ timestamp: items[0].timestamp, process, evidenceId: items[0].evidenceId, message: titles.length ? `使用 ${process}，涉及：${titles.join("；")}` : `${process} 处于活跃状态` });
+    }
   }
   selected.sort((a, b) => a.timestamp.localeCompare(b.timestamp));
-  const compact = selected.slice(0, 45).map(x => `${x.evidenceId} | ${x.timestamp} | ${x.process} | ${x.message.replace(/[\u0000-\u001F\u007F]/g, " ").slice(0, 200)}`).join("\n");
+  const width = (a: Activity) => a.process === "Teams Meeting" ? 1200 : isConversation(a) ? 360 : agentSources.has(a.process) ? 180 : 500;
+  const compact = selected.slice(0, 200).map(x => `${x.evidenceId} | ${x.timestamp} | ${x.process} | ${x.message.replace(/[\u0000-\u001F\u007F]/g, " ").slice(0, width(x))}`).join("\n");
   const context = `你是资深项目负责人，仅依据操作留痕撰写 ${date} 的工作日报。
 
 共同规则：
 1. 按项目与工作主题归并，不按时间、命令或工具调用写流水账。
 2. Claude Code、Codex、终端只是采集来源，不是工作主体，不突出工具名称。
 3. 只写证据能够支持的事实；不得虚构完成、归档、上线、指标、设计或结论。
-4. 不写下一步计划、后续计划、留痕说明或数据完整性。
+4. 不写下一步计划、后续计划、留痕说明或数据完整性。也不要把本系统自身的动作当作工作成果，包括：生成/写入/覆盖日报、周报、月报或会议纪要、同步到飞书知识库、留痕采集等，这些一律不写入报告。
 5. 不暴露密钥、个人信息、证据 ID、完整源码或模型对话。
 6. 禁止粗体、斜体、代码、表格、链接以及 **、__、反引号等 Markdown 行内标记。
 7. 写作规则不是工作证据，不得把规则本身写入日报。
+8. 不得给出留痕中未出现的具体数字、比例、指标；无法从留痕直接确认的原因、鉴权细节或因果结论不要臆测。
+9. 只写与本职工作相关的内容。与工作无关的个人事务一律不写入日报，包括：语言/外语学习、看剧看视频、娱乐、游戏、炒股与证券行情、购物、社交闲聊、私人财务、健身、新闻资讯浏览等。若某条留痕无法判断是否与工作相关，宁可略去，不要为凑内容而纳入。日常邮件、团队沟通、会议、行政/人事流程属于工作，可以保留。
+10. Teams 会议内容是工作本身的一部分：按其实际项目或议题并入对应项目，不要单设“会议纪要”“Teams 会议”或“工具使用”章节；讨论、结论和行动项仅在证据充分时写入。
 
 来源统计：${sourceSummary || "无"}
 系统验证事实：${verifiedFacts.join("；") || "无"}
@@ -87,8 +156,8 @@ ${compact || "当天没有采集到可用操作记录。"}`;
   const withoutSectionHeading = (text: string) => text.trim().replace(/^#{1,2}\s+[^\n]+\n+/, "");
   const overview = withoutSectionHeading(await callModel(`${context}\n\n只写“工作概览”的正文，不要输出标题。用一至两个自然段概括主要项目、核心工作和当天总体成果，约 250–400 个中文字符。`, settings, secrets, 420));
   const projects = withoutSectionHeading(await callModel(`${context}\n\n只写“项目进展与产出”的内容。每个真实项目以“### 项目名称”为标题，随后用连贯自然段写清目标、分析或实施过程、解决的问题与已确认结果。不要机械使用“背景：”“过程：”“状态：”标签。总计约 900–1400 个中文字符。`, settings, secrets, 850));
-  const judgements = withoutSectionHeading(await callModel(`${context}\n\n只写“关键问题与判断”的正文，不要输出标题。归纳最重要的问题、原因判断与决策依据，避免重复项目进展，约 250–450 个中文字符。`, settings, secrets, 420));
-  const status = withoutSectionHeading(await callModel(`${context}\n\n只写“当前状态”的正文，不要输出标题。按项目准确说明截至当天 18:00 已完成、已验证、仍在处理的状态；系统验证事实优先，约 200–350 个中文字符。`, settings, secrets, 350));
+  const judgements = withoutSectionHeading(await callModel(`${context}\n\n只写“关键问题与判断”的正文，不要输出标题。仅归纳操作留痕能直接支撑的问题、原因判断与决策依据，避免重复项目进展；若留痕没有体现明确的问题、冲突或决策，只写一句“当天留痕未体现明确的关键问题或决策”，不要为凑内容而臆测原因、数据或结论。约 200–450 个中文字符。`, settings, secrets, 420));
+  const status = withoutSectionHeading(await callModel(`${context}\n\n只写“当前状态”的正文，不要输出标题。用状态词（已完成、已验证、进行中、受阻、待确认）逐个项目概括截至当天 18:00 的状态，每个项目一句，不要重复“项目进展与产出”的过程描述；系统验证事实优先。约 150–300 个中文字符。`, settings, secrets, 320));
   return `# ${date} 工作日志\n\n## 工作概览\n\n${overview}\n\n## 项目进展与产出\n\n${projects}\n\n## 关键问题与判断\n\n${judgements}\n\n## 当前状态\n\n${status}`;
 }
 
@@ -105,6 +174,7 @@ export async function writeSummaryReport(kind: "weekly" | "monthly", label: stri
 5. 不输出“下一步计划”“后续计划”“留痕说明”“数据完整性”等章节。
 6. 只使用标题、自然段和列表；禁止粗体、斜体、代码、表格、链接以及 **、__、反引号等 Markdown 行内标记。
 7. 内容要有总结性和管理视角，避免机械重复日报原句。
+8. 不得给出来源日报中未出现的具体数字、比例或指标；无法确认的原因或结论不要臆测。
 
 来源日报：
 ${sources || "本周期没有可用日报。"}`;

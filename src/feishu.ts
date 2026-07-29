@@ -1,11 +1,11 @@
 import type { Secrets, Settings } from "./types.js";
 import { dataDir } from "./store.js";
 import { runLarkCli } from "./larkCli.js";
-import { existsSync } from "node:fs";
-import { readFile, writeFile } from "node:fs/promises";
+import { updateJson } from "./jsonStore.js";
+import { dailyTitle } from "./titles.js";
 import { join } from "node:path";
 
-function calendarKey(date: string) {
+export function calendarKey(date: string) {
   const d = new Date(`${date}T12:00:00Z`); const day = d.getUTCDay() || 7; d.setUTCDate(d.getUTCDate() + 4 - day);
   const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1)); const week = Math.ceil((((d.getTime() - yearStart.getTime()) / 86400000) + 1) / 7);
   return { month: date.slice(0, 7), week: `${d.getUTCFullYear()}-W${String(week).padStart(2, "0")}`, weekLabel: `${d.getUTCFullYear()} 年第 ${week} 周` };
@@ -20,29 +20,30 @@ async function createWikiDoc(parent: string, title: string, settings: Settings) 
 
 async function wikiMonthParent(date: string, settings: Settings) {
   if (!settings.feishuWikiNodeToken) throw new Error("请先在初始化页面绑定飞书知识库父页面。");
-  const file = join(dataDir, "wiki-index.json"); const index = existsSync(file) ? JSON.parse(await readFile(file, "utf8")) : {};
+  const file = join(dataDir, "wiki-index.json");
   const key = calendarKey(date); const monthKey = `month:${key.month}`;
-  if (!index[monthKey]) {
-    const created = await createWikiDoc(settings.feishuWikiNodeToken, `${date.slice(0, 4)} 年 ${Number(date.slice(5, 7))} 月`, settings);
-    index[monthKey] = created.node_token;
-  }
-  await writeFile(file, JSON.stringify(index, null, 2), { mode: 0o600 }); return index[monthKey] as string;
+  const index = await updateJson<Record<string, string>>(file, {}, async current => {
+    if (current[monthKey]) return current;
+    const created = await createWikiDoc(settings.feishuWikiNodeToken!, `${date.slice(0, 4)} 年 ${Number(date.slice(5, 7))} 月`, settings);
+    return { ...current, [monthKey]: created.node_token };
+  });
+  return index[monthKey];
 }
 
 async function wikiParent(date: string, settings: Settings) {
   const file = join(dataDir, "wiki-index.json");
   const key = calendarKey(date); const weekKey = `week:${key.week}`;
   const monthParent = await wikiMonthParent(date, settings);
-  const index = existsSync(file) ? JSON.parse(await readFile(file, "utf8")) : {};
-  if (!index[weekKey]) {
+  const index = await updateJson<Record<string, string>>(file, {}, async current => {
+    if (current[weekKey]) return current;
     const created = await createWikiDoc(monthParent, key.weekLabel, settings);
-    index[weekKey] = created.node_token;
-  }
-  await writeFile(file, JSON.stringify(index, null, 2), { mode: 0o600 }); return index[weekKey] as string;
+    return { ...current, [weekKey]: created.node_token };
+  });
+  return index[weekKey];
 }
 
 async function overwriteDocument(documentId: string, report: string, settings: Settings) {
-  await runLarkCli(settings, ["docs", "+update", "--as", "user", "--doc", documentId, "--command", "overwrite", "--doc-format", "markdown", "--content", "-", "--json"], { input: report });
+  await runLarkCli(settings, ["docs", "+update", "--as", "user", "--doc", documentId, "--command", "overwrite", "--doc-format", "xml", "--content", "-", "--json"], { input: report });
 }
 
 export async function resolveWikiTarget(url: string, settings: Settings) {
@@ -54,14 +55,22 @@ export async function resolveWikiTarget(url: string, settings: Settings) {
   return { nodeToken: node.node_token as string, spaceId: node.space_id as string, title: node.title as string, origin, binary };
 }
 
-export async function publishReport(date: string, report: string, settings: Settings, _secrets: Secrets, existingDocumentId?: string, kind: "daily" | "weekly" | "monthly" = "daily", customTitle?: string) {
-  const title = customTitle ?? `${settings.titlePrefix} - ${date}`;
-  let documentId = existingDocumentId;
-  if (!documentId) {
+export async function publishReport(date: string, report: string, settings: Settings, _secrets: Secrets, existingDocumentId?: string, kind: "daily" | "weekly" | "monthly" | "meeting" = "daily", customTitle?: string) {
+  const title = customTitle ?? dailyTitle(date);
+  const createFresh = async () => {
     const parent = kind === "monthly" ? await wikiMonthParent(date, settings) : await wikiParent(date, settings);
-    documentId = (await createWikiDoc(parent, title, settings)).obj_token;
+    return (await createWikiDoc(parent, title, settings)).obj_token as string;
+  };
+  let documentId = existingDocumentId ?? await createFresh();
+  try {
+    await overwriteDocument(documentId, report, settings);
+  } catch (error) {
+    // WHY 自愈：目标文档被用户删除/移入回收站后无法再覆盖，此时重建一篇而非整体失败。
+    if (existingDocumentId && /deleted|no longer be edited|trash|not\s*exist|not\s*found|permission/i.test(String(error))) {
+      documentId = await createFresh();
+      await overwriteDocument(documentId, report, settings);
+    } else throw error;
   }
-  await overwriteDocument(documentId, report, settings);
   const base = (settings.feishuBaseUrl || "https://feishu.cn").replace(/\/$/, "");
   return { title, url: `${base}/docx/${documentId}`, documentId };
 }
