@@ -34,6 +34,9 @@ a{color:#166534}
 .check{display:flex;align-items:center;gap:9px;font-weight:500}
 .check input{display:inline-block;width:18px;height:18px;margin:0;accent-color:#1f5727}
 .teams-config{grid-column:1/-1}
+.audit{grid-column:1/-1}
+.audit-summary{background:#f1f4ed;border:1px solid #dbe4d6;border-radius:9px;padding:12px 14px;margin-bottom:8px;font-size:13px}.audit-summary small{display:block;color:#697469;margin-top:4px}
+.audit-item{display:grid;grid-template-columns:58px 130px 1fr;gap:12px;padding:11px 0;border-bottom:1px solid #ecece5;font-size:12px;line-height:1.55}.audit-item time{font:12px 'DM Mono';color:#778078}.audit-item b{color:#3d5a40}.audit-item span{color:#4e584f;overflow-wrap:anywhere}
 .meeting-actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:18px}
 .danger{background:#8b342f}
 .danger:disabled,.secondary:disabled{opacity:.45;cursor:not-allowed}

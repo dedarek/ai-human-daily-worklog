@@ -4,6 +4,9 @@ export type Settings = {
   monthlySchedule: string;
   timezone: string;
   ignoredProcesses: string[];
+  capturePaused: boolean;
+  redactionEnabled: boolean;
+  redactionTerms: string[];
   llmBaseUrl: string;
   llmProtocol: "openai" | "anthropic";
   llmModel: string;

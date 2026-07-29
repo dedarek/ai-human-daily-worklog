@@ -1,13 +1,11 @@
 import { readdir, readFile, stat } from "node:fs/promises";
 import { join } from "node:path";
 import type { Activity, Settings } from "./types.js";
+import { redact } from "./redact.js";
+
+export { redact } from "./redact.js";
 
 const home = process.env.HOME || "/Users/mac";
-
-export const redact = (text: string) => text
-  .replace(/(sk-[A-Za-z0-9_-]{8,}|Bearer\s+)[A-Za-z0-9._-]+/gi, "$1[REDACTED]")
-  .replace(/((?:api[_-]?key|token|secret|password|passwd|authorization)\s*[=:]\s*)[^\s;,}]+/gi, "$1[REDACTED]")
-  .replace(/(--(?:api[_-]?key|token|secret|password)(?:=|\s+))[^\s]+/gi, "$1[REDACTED]");
 
 // 从各 agent 日志提取真实用户提问时，剔除系统注入内容（环境上下文、命令回显、工具结果、元消息）与低信号短语。
 const STOP_PROMPTS = new Set(["继续", "ok", "好的", "嗯", "是的", "可以", "行", "对", "yes", "y", "go", "next", "对的", "嗯嗯"]);
