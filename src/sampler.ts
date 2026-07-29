@@ -23,6 +23,7 @@ const frontmostApp = `
 `;
 
 export async function sampleOperation(settings: Settings): Promise<Operation | null> {
+  if (settings.capturePaused) return null;
   if (!isWorkTime(settings.timezone)) return null;
   let observed: { app: string; windowTitle: string };
   try {

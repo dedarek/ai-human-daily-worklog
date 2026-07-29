@@ -9,6 +9,7 @@ import { schedule } from "./scheduler.js";
 import { dataDir, getSecrets, getSettings, logRun, saveSecrets, saveSettings } from "./store.js";
 import { isoDate } from "./time.js";
 import type { Settings } from "./types.js";
+import { readAudit } from "./collector.js";
 import { getTeamsMeetingStatus, listTeamsMeetings, retryTeamsMeeting, startTeamsMeeting, stopTeamsMeeting } from "./teamsMeeting.js";
 
 const legacyKeys = ["feishuAppId", "feishuAppSecret", "feishuFolderToken", "feishuWikiSpaceId", "titlePrefix", "teamsAudioDevice", "teamsMicrophoneDevice"];
@@ -114,5 +115,24 @@ export function registerRoutes(app: Express) {
   app.get("/api/runs", async (_req, res) => {
     const runs = await reportRuns();
     res.json(runs.slice(-12).reverse());
+  });
+
+  app.get("/api/audit", async (req, res) => {
+    const date = String(req.query.date || isoDate());
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return res.status(400).json({ error: "日期格式应为 YYYY-MM-DD。" });
+    try {
+      const settings = await getSettings();
+      const { activities, manifest } = await readAudit(date, settings);
+      const byProcess = activities.reduce<Record<string, number>>((counts, item) => { counts[item.process] = (counts[item.process] || 0) + 1; return counts; }, {});
+      res.json({ date, capturePaused: settings.capturePaused, redactionEnabled: settings.redactionEnabled, eventCount: activities.length, byProcess, manifest, activities: activities.slice(-200).reverse() });
+    } catch (error) { res.status(400).json({ error: String(error) }); }
+  });
+
+  app.post("/api/capture", async (req, res) => {
+    const settings = await getSettings();
+    settings.capturePaused = req.body?.paused === true;
+    await saveSettings(settings);
+    await logRun({ status: settings.capturePaused ? "capture_paused" : "capture_resumed" });
+    res.json({ ok: true, capturePaused: settings.capturePaused });
   });
 }

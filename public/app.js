@@ -56,8 +56,11 @@ async function load() {
 form.addEventListener("submit", async event => {
   event.preventDefault(); const data = Object.fromEntries(new FormData(form));
   data.ignoredProcesses = data.ignoredProcesses.split("\n").map(value => value.trim()).filter(Boolean);
+  data.redactionTerms = data.redactionTerms.split("\n").map(value => value.trim()).filter(Boolean);
   data.teamsMeetingEnabled = form.elements.teamsMeetingEnabled.checked;
   data.teamsAutoRecord = form.elements.teamsAutoRecord.checked;
+  data.capturePaused = form.elements.capturePaused.checked;
+  data.redactionEnabled = form.elements.redactionEnabled.checked;
   try { await json("/api/settings", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(data) }); $("#notice").textContent = "配置已保存。"; await load(); }
   catch (error) { $("#notice").textContent = error.message; }
 });
@@ -85,7 +88,16 @@ $("#meetingStop").addEventListener("click", async () => {
   catch (error) { $("#notice").textContent = error.message; }
 });
 
+async function loadAudit() {
+  const date = new Date().toLocaleDateString("en-CA");
+  const audit = await json(`/api/audit?date=${encodeURIComponent(date)}`);
+  const sources = Object.entries(audit.byProcess || {}).map(([name, count]) => `${escapeHtml(name)} ${count}`).join(" · ");
+  $("#auditSummary").innerHTML = `<b>${audit.eventCount} 条已过滤素材</b><small>${sources || "今天还没有工作素材"} · ${audit.redactionEnabled ? "敏感信息过滤已开启" : "敏感信息过滤已关闭"}</small>`;
+  $("#audit").innerHTML = audit.activities?.length ? audit.activities.map(item => `<article class="audit-item"><time>${new Date(item.timestamp).toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" })}</time><b>${escapeHtml(item.process)}</b><span>${escapeHtml(item.message)}</span></article>`).join("") : '<p class="hint">还没有可查看的采集内容。</p>';
+}
+
+$("#auditRefresh").addEventListener("click", () => loadAudit().catch(error => $("#notice").textContent = error.message));
 $("#refresh").addEventListener("click", () => loadRuns().catch(error => $("#notice").textContent = error.message));
 $("#meetingRefresh").addEventListener("click", () => Promise.all([loadMeetingStatus(), loadMeetings()]).catch(error => $("#notice").textContent = error.message));
-load().catch(error => $("#notice").textContent = error.message);
+load().then(loadAudit).catch(error => $("#notice").textContent = error.message);
 setInterval(() => Promise.all([loadMeetingStatus(), loadMeetings()]).catch(() => {}), 5000);

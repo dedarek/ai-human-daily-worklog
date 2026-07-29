@@ -243,6 +243,7 @@ export async function retryTeamsMeeting(id: string) {
 export async function startTeamsMeeting(origin: "automatic" | "manual" = "manual", requestedTitle?: string) {
   if (current) throw new Error("已有一场 Teams 会议正在记录。");
   const settings = await getSettings(); const startedAt = new Date().toISOString();
+  if (settings.capturePaused) throw new Error("采集已暂停，请先在 Worklog 页面恢复采集。");
   const id = `${localDate(startedAt, settings.timezone)}-${startedAt.slice(11, 19).replace(/:/g, "")}-${randomUUID().slice(0, 6)}`;
   const dir = join(dataDir, "meetings", id); await mkdir(dir, { recursive: true });
   const title = meetingTitle(localDate(startedAt, settings.timezone), localTime(startedAt, settings.timezone), requestedTitle);
@@ -287,7 +288,7 @@ async function poll() {
       windowTitles: titles,
       current,
     };
-    if (!settings.teamsMeetingEnabled || !settings.teamsAutoRecord) { startSignals = 0; return; }
+    if (settings.capturePaused || !settings.teamsMeetingEnabled || !settings.teamsAutoRecord) { startSignals = 0; return; }
     if (!current) {
       startSignals = meetingSignal ? startSignals + 1 : 0;
       if (startSignals >= 2) {
