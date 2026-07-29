@@ -15,7 +15,7 @@ A successful build is not the same as end-to-end validation.
 | TypeScript, 43 unit tests, server/API/UI smoke test | Passed | Passed | Passed |
 | Native CI package build | Universal DMG passed | NSIS x64 passed | AppImage/deb x64 passed |
 | Package structure and public artifact type | Verified | Verified as NSIS PE executable | Verified as AppImage/deb |
-| Automated package install/start/uninstall | DMG structure verified | Native runner acceptance workflow added | AppImage/deb native runner acceptance workflow added |
+| Automated package install/start/uninstall | Universal DMG build passed | NSIS install/start/health/uninstall passed on native CI | AppImage start plus deb install/uninstall passed on native CI |
 | Tray/menu actions | Previously exercised; v0.3 regression pending | Pending | Pending |
 | Login/autostart recovery | macOS service path exercised | Pending | Pending across major desktops |
 | Foreground application collection | Validated | Implementation and CI compile passed; interactive validation pending | X11/KDE implementation passed CI; desktop-session validation pending |
