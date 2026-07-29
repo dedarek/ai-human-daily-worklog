@@ -82,7 +82,8 @@ export async function saveSecrets(secrets: Partial<Secrets>) {
   }
   await mkdir(dataDir, { recursive: true });
   if (worklogPlatform() === "windows") {
-    const encrypted = await runWithInput(powershell(), ["-NoProfile", "-NonInteractive", "-Command", "$plain=[Console]::In.ReadToEnd(); ConvertFrom-SecureString (ConvertTo-SecureString $plain -AsPlainText -Force)"], secrets.llmApiKey);
+    const script = "$plain=[Console]::In.ReadToEnd(); $bytes=[Text.Encoding]::UTF8.GetBytes($plain); $cipher=[Security.Cryptography.ProtectedData]::Protect($bytes,$null,[Security.Cryptography.DataProtectionScope]::CurrentUser); [Convert]::ToBase64String($cipher)";
+    const encrypted = await runWithInput(powershell(), ["-NoProfile", "-NonInteractive", "-Command", script], secrets.llmApiKey);
     await writeFile(join(dataDir, "secrets.dpapi"), encrypted, { mode: 0o600 });
     return;
   }
@@ -101,7 +102,7 @@ export async function getSecrets(): Promise<Secrets> {
   if (worklogPlatform() === "windows") {
     try {
       const encrypted = await readFile(join(dataDir, "secrets.dpapi"), "utf8");
-      const script = "$cipher=[Console]::In.ReadToEnd(); $secure=ConvertTo-SecureString $cipher; $ptr=[Runtime.InteropServices.Marshal]::SecureStringToBSTR($secure); try {[Runtime.InteropServices.Marshal]::PtrToStringBSTR($ptr)} finally {[Runtime.InteropServices.Marshal]::ZeroFreeBSTR($ptr)}";
+      const script = "$cipher=[Convert]::FromBase64String([Console]::In.ReadToEnd()); $bytes=[Security.Cryptography.ProtectedData]::Unprotect($cipher,$null,[Security.Cryptography.DataProtectionScope]::CurrentUser); [Text.Encoding]::UTF8.GetString($bytes)";
       return { llmApiKey: await runWithInput(powershell(), ["-NoProfile", "-NonInteractive", "-Command", script], encrypted) };
     } catch { return { llmApiKey: process.env.WORKLOG_LLM_API_KEY || "" }; }
   }
