@@ -1,0 +1,40 @@
+name: Feature request
+description: Propose a workflow, Agent source, meeting platform, or destination.
+title: "[Feature]: "
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: workflow
+    attributes:
+      label: What workflow should Worklog support?
+      description: Describe the real work situation and where the relevant data currently lives.
+    validations:
+      required: true
+  - type: textarea
+    id: outcome
+    attributes:
+      label: What should appear in the work archive?
+      description: Explain the useful outcome, not only the product or API name.
+    validations:
+      required: true
+  - type: textarea
+    id: privacy
+    attributes:
+      label: Privacy and data-transfer considerations
+      description: What sensitive data exists, and what must remain local?
+    validations:
+      required: true
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - Agent source
+        - Meeting platform
+        - Publishing destination
+        - Report intelligence
+        - Privacy and controls
+        - macOS application
+        - Other
+    validations:
+      required: true

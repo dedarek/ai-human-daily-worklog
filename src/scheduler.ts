@@ -24,6 +24,10 @@ async function hasEvidence(date: string) {
   return [join(dataDir, "evidence", date), join(dataDir, "operations", date)].some(existsSync);
 }
 
+function hasReports(start: string, end: string) {
+  return workdays(start, end).some(date => existsSync(join(dataDir, "reports", `${date}.md`)));
+}
+
 async function catchUp(now: Date, timezone: string) {
   const published = await readJson<Record<string, unknown>>(join(dataDir, "published.json"), {});
   const today = isoDate(now, timezone);
@@ -43,14 +47,14 @@ async function catchUp(now: Date, timezone: string) {
   const afterWeekly = hour > 8 || (hour === 8 && minute >= 0);
   if (weekday >= 1 && afterWeekly) {
     const range = previousWorkWeek(today, timezone);
-    if (!published[`weekly:${range.start}`]) tasksToRun.push(() => runSummary("weekly", range.start, range.end, false));
+    if (!published[`weekly:${range.start}`] && hasReports(range.start, range.end)) tasksToRun.push(() => runSummary("weekly", range.start, range.end, false));
   }
 
   const day = Number(new Intl.DateTimeFormat("en-GB", { timeZone: timezone, day: "2-digit" }).format(now));
   const afterMonthly = hour > 8 || (hour === 8 && minute >= 10);
   if (day >= 1 && afterMonthly) {
     const range = previousMonth(today);
-    if (!published[`monthly:${range.start.slice(0, 7)}`]) tasksToRun.push(() => runSummary("monthly", range.start, range.end, false));
+    if (!published[`monthly:${range.start.slice(0, 7)}`] && hasReports(range.start, range.end)) tasksToRun.push(() => runSummary("monthly", range.start, range.end, false));
   }
 
   for (const task of tasksToRun) {

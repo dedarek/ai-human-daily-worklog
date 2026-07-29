@@ -3,6 +3,7 @@ import { appendFile, mkdir } from "node:fs/promises";
 import { promisify } from "node:util";
 import { join } from "node:path";
 import { dataDir } from "./store.js";
+import { redact } from "./redact.js";
 import type { Operation, Settings } from "./types.js";
 
 const exec = promisify(execFile);
@@ -36,7 +37,8 @@ export async function sampleOperation(settings: Settings): Promise<Operation | n
   }
   if (!observed.app || settings.ignoredProcesses.includes(observed.app)) return null;
   const timestamp = new Date().toISOString(); const date = dateIn(settings.timezone);
-  const operation: Operation = { timestamp, app: observed.app, windowTitle: observed.windowTitle.slice(0, 300), evidenceId: `op-${timestamp.replace(/\D/g, "")}` };
+  const safe = (value: string) => settings.redactionEnabled ? redact(value, settings.redactionTerms) : value;
+  const operation: Operation = { timestamp, app: safe(observed.app), windowTitle: safe(observed.windowTitle).slice(0, 300), evidenceId: `op-${timestamp.replace(/\D/g, "")}` };
   const dir = join(dataDir, "operations", date); await mkdir(dir, { recursive: true });
   await appendFile(join(dir, "frontmost.jsonl"), JSON.stringify(operation) + "\n", { mode: 0o600 });
   return operation;

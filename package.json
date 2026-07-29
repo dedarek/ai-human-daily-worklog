@@ -2,6 +2,9 @@
   "name": "worklog",
   "version": "0.1.0",
   "private": true,
+  "license": "Apache-2.0",
+  "repository": "https://github.com/dedarek/ai-human-daily-worklog",
+  "bugs": "https://github.com/dedarek/ai-human-daily-worklog/issues",
   "description": "Local-first macOS work journal that turns activity and Teams meetings into Feishu reports.",
   "type": "module",
   "scripts": {
