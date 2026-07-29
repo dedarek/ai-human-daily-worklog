@@ -1,5 +1,5 @@
 import { existsSync } from "node:fs";
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, readFile, stat, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { dataDir, sha256 } from "./store.js";
 import type { Activity, Operation, Settings } from "./types.js";
@@ -28,6 +28,7 @@ export async function readAudit(date: string, settings: Settings, window = { sta
   const input = join(evidenceDir(date), "activity.jsonl");
   if (!existsSync(input)) return collect(date, settings, window);
   try {
+    if ((await stat(input)).mtimeMs < Date.now() - 5 * 60_000) return collect(date, settings, window);
     const activities = sanitizeActivities((await readFile(input, "utf8")).trim().split("\n").filter(Boolean).map(line => JSON.parse(line) as Activity), settings);
     const manifest = await saveEvidence(date, activities, window);
     return { activities, manifest };

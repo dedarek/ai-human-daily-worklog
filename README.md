@@ -14,6 +14,7 @@
   <img alt="Local first" src="https://img.shields.io/badge/local--first-5B67F1?style=flat-square" />
   <img alt="Teams" src="https://img.shields.io/badge/Teams_system_audio-6264A7?style=flat-square&logo=microsoftteams&logoColor=white" />
   <img alt="Feishu CLI" src="https://img.shields.io/badge/Feishu_CLI-3370FF?style=flat-square" />
+  <img alt="Apache 2.0" src="https://img.shields.io/badge/license-Apache--2.0-5B67F1?style=flat-square" />
 </p>
 
 [为什么需要它](#为什么需要它) · [它如何工作](#它如何工作) · [快速开始](#快速开始) · [隐私边界](#隐私边界) · [Roadmap](#roadmap)
@@ -326,6 +327,10 @@ node --check public/app.js
 Teams 会议自动检测思路参考 [qaid/meeting-minutes-autodetect](https://github.com/qaid/meeting-minutes-autodetect)，本地语音转写由 [whisper.cpp](https://github.com/ggerganov/whisper.cpp) 提供，飞书文档与知识库操作使用官方 [飞书 CLI](https://open.feishu.cn/document/no_class/mcp-archive/feishu-cli-installation-guide.md)。
 
 第三方许可见 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。
+
+## 参与与许可
+
+Worklog 采用 [Apache License 2.0](LICENSE) 开源。开始贡献前请阅读 [贡献指南](CONTRIBUTING.md)、[安全策略](SECURITY.md) 和 [隐私模型](PRIVACY.md)。
 
 <div align="center">
 

@@ -8,6 +8,7 @@ import { writeMeetingMinutes } from "./llm.js";
 import { dataDir, getSecrets, getSettings, logRun } from "./store.js";
 import { readJson, updateJson } from "./jsonStore.js";
 import { hasMeetingSignal, isMeetingTitle, isMeetingWindow, transcriptQuality } from "./meetingDetect.js";
+import { redact } from "./redact.js";
 import { meetingTitle } from "./titles.js";
 import type { MeetingRecord, Settings } from "./types.js";
 
@@ -201,8 +202,9 @@ async function transcribeAndPublish(record: MeetingRecord) {
       await logRun({ status: "meeting_ignored", kind: "meeting", meetingId: record.id, title: record.title, reason: quality.reason });
       return;
     }
-    record.status = "summarizing"; record.transcriptPreview = transcript.slice(0, 240); await saveMeeting(record);
-    const report = await writeMeetingMinutes(record.title, record.startedAt, record.endedAt!, transcript, settings, secrets);
+    const safeTranscript = settings.redactionEnabled ? redact(transcript, settings.redactionTerms) : transcript;
+    record.status = "summarizing"; record.transcriptPreview = safeTranscript.slice(0, 240); await saveMeeting(record);
+    const report = await writeMeetingMinutes(record.title, record.startedAt, record.endedAt!, safeTranscript, settings, secrets);
     if (/^无有效会议内容[。.!！]?$/u.test(report.trim()) || !extractSection(report, "会议概览")) {
       record.status = "ignored";
       record.error = "逐字稿无法支撑明确的工作内容，未纳入日报。";
