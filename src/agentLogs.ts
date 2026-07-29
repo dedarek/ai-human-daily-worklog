@@ -1,4 +1,6 @@
 import { readdir, readFile, stat } from "node:fs/promises";
+import { existsSync } from "node:fs";
+import { DatabaseSync } from "node:sqlite";
 import { join } from "node:path";
 import type { Activity, Settings } from "./types.js";
 import { redact } from "./redact.js";
@@ -115,9 +117,50 @@ async function codexActivities(date: string, settings: Settings): Promise<Activi
   return activities;
 }
 
+function opencodeDetail(data: any) {
+  const input = data?.state?.input ?? {};
+  const detail = input.command ?? input.filePath ?? input.path ?? input.pattern ?? input.description;
+  return detail ? `${data.tool ?? "工具"}：${redact(String(detail)).slice(0, 500)}` : `调用工具 ${data.tool ?? "未知"}`;
+}
+
+function opencodeActivities(date: string, settings: Settings): Activity[] {
+  const dbPath = join(home, ".local", "share", "opencode", "opencode.db");
+  if (!existsSync(dbPath)) return [];
+  const db = new DatabaseSync(dbPath, { readOnly: true });
+  const out: Activity[] = [];
+  const since = Date.parse(`${date}T00:00:00Z`) - 24 * 3600 * 1000;
+  const iso = (value: number) => new Date(value).toISOString();
+  try {
+    const sessions = db.prepare("SELECT id, title, time_updated FROM session WHERE time_updated >= ? ORDER BY time_updated").all(since) as any[];
+    for (const row of sessions) {
+      const timestamp = iso(Number(row.time_updated));
+      if (localDate(timestamp, settings.timezone) !== date) continue;
+      const title = cleanPrompt(row.title);
+      if (title) out.push({ timestamp, process: "OpenCode", message: `任务：${redact(title).slice(0, 400)}`, evidenceId: `opencode-session-${row.id}` });
+    }
+    const parts = db.prepare(
+      "SELECT p.id, p.data, p.time_created, json_extract(m.data, '$.role') AS role " +
+      "FROM part p JOIN message m ON p.message_id = m.id WHERE p.time_created >= ? ORDER BY p.time_created"
+    ).all(since) as any[];
+    for (const row of parts) {
+      const timestamp = iso(Number(row.time_created));
+      if (localDate(timestamp, settings.timezone) !== date) continue;
+      let data: any; try { data = JSON.parse(row.data); } catch { continue; }
+      if (row.role === "user" && data?.type === "text") {
+        const prompt = cleanPrompt(data.text);
+        if (prompt) out.push({ timestamp, process: "OpenCode", message: `提问：${redact(prompt).slice(0, 500)}`, evidenceId: `opencode-user-${row.id}` });
+      } else if (data?.type === "tool" && ["bash", "edit", "write", "read", "glob", "grep"].includes(String(data.tool).toLowerCase())) {
+        out.push({ timestamp, process: "OpenCode", message: opencodeDetail(data), evidenceId: `opencode-tool-${row.id}` });
+      }
+    }
+  } catch { /* OpenCode schema can change; skip this source without blocking reports */ }
+  finally { db.close(); }
+  return out;
+}
+
 export async function collectAgentActivities(date: string, settings: Settings) {
   const [claude, codex] = await Promise.all([claudeActivities(date, settings), codexActivities(date, settings)]);
   const unique = new Map<string, Activity>();
-  for (const item of [...claude, ...codex]) if (!unique.has(item.evidenceId)) unique.set(item.evidenceId, item);
+  for (const item of [...claude, ...codex, ...opencodeActivities(date, settings)]) if (!unique.has(item.evidenceId)) unique.set(item.evidenceId, item);
   return [...unique.values()];
 }

@@ -259,7 +259,7 @@ Worklog 的目标不只是生成一份日报，而是成为 AI 时代个人可�
 - [x] Codex 原生执行日志
 - [x] 终端命令、前台应用和窗口上下文
 - [x] Microsoft Teams 系统音频与本地会议转写
-- [ ] OpenCode 原生执行日志
+- [x] OpenCode 原生执行日志
 - [ ] Cursor、Windsurf、Cline、Continue 等 IDE Agent
 - [ ] VS Code、JetBrains 与 Xcode 的项目、文件和调试活动
 - [ ] Git 提交、分支、Pull Request、Issue 与 CI 结果
