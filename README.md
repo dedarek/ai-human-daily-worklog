@@ -4,10 +4,10 @@
 
 <br />
 
-### 每个 App 都有日志。现在，你的一天也有了。
+## AI 时代，自动生成属于你自己的工作档案
 
-把散落在 Agent、终端、应用和会议里的工作重新汇合，<br />
-过滤无关噪声，生成日报、周报和月报，自动归档到飞书。
+Worklog 在你的 Mac 上汇合 Agent、终端、应用与会议留下的工作证据，<br />
+过滤无关噪声，生成日报、周报和月报，自动归档到飞书或本地 Markdown。
 
 <p>
   <img alt="macOS 13+" src="https://img.shields.io/badge/macOS_13+-111827?style=flat-square&logo=apple&logoColor=white" />
@@ -15,14 +15,16 @@
   <img alt="Teams" src="https://img.shields.io/badge/Teams_system_audio-6264A7?style=flat-square&logo=microsoftteams&logoColor=white" />
   <img alt="Feishu CLI" src="https://img.shields.io/badge/Feishu_CLI-3370FF?style=flat-square" />
   <img alt="Apache 2.0" src="https://img.shields.io/badge/license-Apache--2.0-5B67F1?style=flat-square" />
+  <img alt="CI" src="https://img.shields.io/github/actions/workflow/status/dedarek/ai-human-daily-worklog/ci.yml?branch=main&amp;style=flat-square&amp;label=build" />
+  <img alt="GitHub stars" src="https://img.shields.io/github/stars/dedarek/ai-human-daily-worklog?style=flat-square" />
 </p>
 
-[为什么需要它](#为什么需要它) · [它如何工作](#它如何工作) · [快速开始](#快速开始) · [隐私边界](#隐私边界) · [Roadmap](#roadmap)
+[产品预览](#产品预览) · [核心能力](#核心能力) · [快速开始](#快速开始) · [隐私边界](#隐私边界) · [Roadmap](#roadmap)
 
 </div>
 
 > [!NOTE]
-> Worklog 目前只支持 macOS。签名、公证的 `.dmg` 安装包正在规划中；当前版本从源码安装。
+> Worklog 目前是面向 macOS 的公开预览版。签名、公证的 `.dmg` 正在规划中；当前版本从源码安装。
 
 ## 为什么需要它
 
@@ -40,7 +42,7 @@ Worklog 为此而生。它从电脑上已经存在的操作与 Agent 执行记�
 
 最后留下的不是工具调用流水账，而是一份关于**项目进展、实际产出、关键判断和当前状态**的个人工作档案。
 
-当然，那些与工作无关的事情会被过滤掉。
+那些与工作无关的事情，不应该进入你的工作档案。
 
 ## 一天，只留一份清楚的记录
 
@@ -70,18 +72,24 @@ Worklog 为此而生。它从电脑上已经存在的操作与 Agent 执行记�
 </tr>
 </table>
 
+## 产品预览
+
+<img src="docs/assets/worklog-dashboard.svg" alt="Worklog 本地管理页面：运行状态、隐私控制、采集审计和最近生成结果" width="100%" />
+
+<p align="center"><sub>基于真实界面绘制的脱敏预览；不包含用户身份、工作内容、路径或模型凭据。</sub></p>
+
 ## 它记录什么
 
 | 记录 | 不记录 |
 | --- | --- |
-| Claude Code 与 Codex 的任务、工具调用和文件操作 | 键盘输入与密码 |
+| Claude Code、Codex 与 OpenCode 的任务、工具调用和文件操作 | 键盘输入与密码 |
 | 可确认的终端命令和前台应用上下文 | 剪贴板内容 |
 | Teams 中电脑实际播放的会议声音 | 麦克风音频 |
 | 会议讨论、结论与待办 | 截图与屏幕画面 |
 | 生成报告所需的结构化工作证据 | 浏览器页面正文 |
 | 日报、周报和月报的本地副本 | 与工作无关的系统事件 |
 
-当前版本会深度解析 **Claude Code** 与 **Codex** 的执行日志。OpenCode 等其他 Agent 工具目前通过前台应用与终端活动提供线索，后续将逐步增加原生日志解析器。
+当前版本原生解析 Claude Code、Codex 与 OpenCode 的执行日志；其他 Agent 工具仍可通过前台应用与终端活动提供基础线索。
 
 ## 它如何工作
 
@@ -129,6 +137,8 @@ flowchart LR
 ### 1 · 启动 Worklog
 
 ```bash
+git clone https://github.com/dedarek/ai-human-daily-worklog.git
+cd ai-human-daily-worklog
 npm install
 npm run build-native
 npm start
@@ -153,7 +163,8 @@ lark-cli auth status --json --verify
 1. 确认飞书 CLI 已连接到正确用户；
 2. 填写 LLM 协议、API 地址、模型和 API Key；
 3. 粘贴目标飞书知识库父页面链接；
-4. 点击「立即生成今天日报」完成首次验证。
+4. 在「今天采集了什么」中确认过滤后的素材；
+5. 点击「立即生成今天日报」完成首次验证。
 
 ```bash
 # 一次检查主要依赖与授权状态
@@ -183,7 +194,7 @@ Worklog 是一个 **local-first** 项目，而不是一个云端监控服务。
 - 原始活动、会议音频、逐字稿、报告副本和飞书索引保存在本机 `~/Library/Application Support/Worklog/`；
 - LLM API Key 保存在 macOS Keychain；
 - 原始会议音频不会发送给 LLM，也不会上传飞书；
-- 只有过滤后的工作证据与有效逐字稿会发送给你配置的 LLM；
+- 只有经过过滤与脱敏的工作证据、会议文本会发送给你配置的 LLM；
 - 本机数据、配置与密钥均被 Git 忽略。
 
 > [!IMPORTANT]
@@ -244,7 +255,9 @@ launchctl print gui/$(id -u)/com.local.mac-worklog-feishu
 
 Worklog 的目标不只是生成一份日报，而是成为 AI 时代个人可拥有、可迁移、可长期检索的工作档案。下面是当前规划方向；顺序代表大致优先级，不代表固定发布日期。
 
-### 近期 · 做成真正的 macOS 产品
+<details open>
+<summary><strong>近期 · 做成真正的 macOS 产品</strong></summary>
+
 
 - [ ] 发布同时支持 Apple Silicon 与 Intel 的签名、公证 `.dmg`
 - [ ] 提供菜单栏应用：查看采集状态、暂停记录、手动生成和快速打开当天文档
@@ -254,7 +267,11 @@ Worklog 的目标不只是生成一份日报，而是成为 AI 时代个人可�
 - [x] 在 Mac 睡眠、关机或离线错过任务后自动补跑，并保证同一报告不会重复创建
 - [ ] 提供更清楚的健康检查、失败通知、重试队列与可导出的诊断报告
 
-### 更多 Agent 与工作数据源
+</details>
+
+<details>
+<summary><strong>更多 Agent 与工作数据源</strong></summary>
+
 
 - [x] Claude Code 原生执行日志
 - [x] Codex 原生执行日志
@@ -268,7 +285,11 @@ Worklog 的目标不只是生成一份日报，而是成为 AI 时代个人可�
 - [ ] Zoom、Google Meet 与飞书会议，并支持说话人区分和待办归属
 - [ ] 插件化采集器 SDK，让社区为新 Agent 和工具添加解析器
 
-### 不止飞书：更多归档目的地
+</details>
+
+<details>
+<summary><strong>不止飞书：更多归档目的地</strong></summary>
+
 
 - [x] 飞书知识库，按「月份 → 周 → 日」自动归档
 - [x] 本地 Markdown 文件夹，适配 Obsidian、Logseq 和普通 Git 仓库
@@ -279,7 +300,11 @@ Worklog 的目标不只是生成一份日报，而是成为 AI 时代个人可�
 - [ ] Webhook 与开放 API，接入企业内部知识库或自建系统
 - [ ] 同时发布到多个目的地，并分别配置模板、语言和可见内容
 
-### 更懂工作的报告
+</details>
+
+<details>
+<summary><strong>更懂工作的报告</strong></summary>
+
 
 - [ ] 自动识别项目边界，把同一项目在多个 Agent 和应用中的活动合并
 - [ ] 跨会话、跨 Agent 去重，避免把同一修改重复计算为多项成果
@@ -291,7 +316,11 @@ Worklog 的目标不只是生成一份日报，而是成为 AI 时代个人可�
 - [ ] 支持中文、英文及双语报告，并允许配置个人写作语气
 - [ ] 在发送前提供预览、局部重写、人工确认和版本对比
 
-### 隐私、控制与本地 AI
+</details>
+
+<details>
+<summary><strong>隐私、控制与本地 AI</strong></summary>
+
 
 - [x] 可配置的敏感信息识别与脱敏：密钥、客户名、仓库名、路径和自定义词表
 - [ ] 应用、项目、时间段与会议级别的允许/排除规则
@@ -302,14 +331,21 @@ Worklog 的目标不只是生成一份日报，而是成为 AI 时代个人可�
 - [x] 提供「今天记录了什么」审计视图和暂停/恢复能力
 - [ ] 增加历史记录一键删除、按日期清理和导出前确认
 
-### 跨平台与开放生态
+</details>
+
+<details>
+<summary><strong>跨平台与开放生态</strong></summary>
+
 
 - [ ] Linux 桌面版，优先支持常见终端、编辑器和 Agent 日志
 - [ ] Windows 桌面版，并研究 Teams 系统音频的原生采集方案
 - [ ] 定义稳定的工作证据、会议和报告数据格式
 - [ ] 支持配置、模板和历史索引的导入导出
 - [ ] 提供采集器、过滤器、报告模板和发布器插件接口
-- [ ] 增加贡献指南、隐私威胁模型、兼容性矩阵和公开版本计划
+- [x] 增加贡献指南、隐私模型、安全策略与标准 Issue / PR 模板
+- [ ] 建立兼容性矩阵、公开版本计划与稳定发布节奏
+
+</details>
 
 如果你希望 Worklog 优先支持某个 Agent、会议平台或归档目的地，欢迎通过 [Issue](https://github.com/dedarek/ai-human-daily-worklog/issues) 描述你的工作流，而不只是提交一个工具名称。
 
