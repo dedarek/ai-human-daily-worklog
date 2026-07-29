@@ -13,7 +13,9 @@ mkdir -p "$work"
 export WORKLOG_PORT=4429
 export WORKLOG_DATA_DIR="$work/data"
 export WORKLOG_DISABLE_BACKGROUND=1
-xvfb-run -a "$work/squashfs-root/worklog" --hidden >"$work/app.log" 2>&1 &
+# GitHub-hosted runners cannot preserve the root-owned 4755 chrome-sandbox bit
+# after AppImage extraction. Disable Chromium's sandbox only in this disposable CI session.
+xvfb-run -a "$work/squashfs-root/worklog" --no-sandbox --hidden >"$work/app.log" 2>&1 &
 pid=$!
 trap 'kill "$pid" 2>/dev/null || true' EXIT
 ready=0
