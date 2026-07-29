@@ -6,12 +6,14 @@ BUILD_ROOT="${WORKLOG_BUILD_DIR:-$ROOT/build}/whisper"
 SOURCE="$BUILD_ROOT/source"
 OUTPUT="${1:-$BUILD_ROOT/whisper-cli}"
 VERSION="${WHISPER_CPP_VERSION:-v1.9.1}"
+EXPECTED_COMMIT="${WHISPER_CPP_COMMIT:-f049fff95a089aa9969deb009cdd4892b3e74916}"
 
 command -v cmake >/dev/null || { echo "需要 CMake：brew install cmake" >&2; exit 1; }
 mkdir -p "$BUILD_ROOT" "$(dirname "$OUTPUT")"
 if [[ ! -d "$SOURCE/.git" ]]; then
   git clone --depth 1 --branch "$VERSION" https://github.com/ggml-org/whisper.cpp.git "$SOURCE"
 fi
+[[ "$(git -C "$SOURCE" rev-parse HEAD)" == "$EXPECTED_COMMIT" ]] || { echo "whisper.cpp 源码提交与固定版本不一致" >&2; exit 1; }
 
 for arch in arm64 x86_64; do
   cmake -S "$SOURCE" -B "$BUILD_ROOT/$arch" \

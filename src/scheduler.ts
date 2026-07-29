@@ -1,13 +1,21 @@
 import cron, { type ScheduledTask } from "node-cron";
 import { existsSync } from "node:fs";
+import { readdir } from "node:fs/promises";
 import { join } from "node:path";
 import { getSettings, logRun, dataDir } from "./store.js";
 import { readJson } from "./jsonStore.js";
 import { run, runSummary } from "./reportRunner.js";
 import { createMorningBrief } from "./morningBrief.js";
 import { isoDate, dateAdd, previousMonth, workdays } from "./time.js";
+import { createMutex } from "./jsonStore.js";
 
 let tasks: ScheduledTask[] = [];
+const catchUpRun = createMutex();
+
+export function stopSchedule() {
+  for (const task of tasks) task.stop();
+  tasks = [];
+}
 
 function localWeekday(date: Date, timezone: string) {
   const name = new Intl.DateTimeFormat("en-US", { timeZone: timezone, weekday: "short" }).format(date);
@@ -22,7 +30,10 @@ export function previousWorkWeek(today: string, timezone: string) {
 }
 
 async function hasEvidence(date: string) {
-  return [join(dataDir, "evidence", date), join(dataDir, "operations", date)].some(existsSync);
+  for (const directory of [join(dataDir, "evidence", date), join(dataDir, "operations", date)]) {
+    if (existsSync(directory) && (await readdir(directory).catch(() => [])).length) return true;
+  }
+  return false;
 }
 
 function hasReports(start: string, end: string) {
@@ -49,14 +60,14 @@ async function catchUp(now: Date, timezone: string) {
   }
 
   const afterWeekly = hour > 8 || (hour === 8 && minute >= 0);
-  if (weekday >= 1 && afterWeekly) {
+  if (weekday >= 1 && weekday <= 5 && afterWeekly) {
     const range = previousWorkWeek(today, timezone);
     if (!published[`weekly:${range.start}`] && hasReports(range.start, range.end)) tasksToRun.push(() => runSummary("weekly", range.start, range.end, false));
   }
 
   const day = Number(new Intl.DateTimeFormat("en-GB", { timeZone: timezone, day: "2-digit" }).format(now));
   const afterMonthly = hour > 8 || (hour === 8 && minute >= 10);
-  if (day >= 1 && afterMonthly) {
+  if (day >= 1 && day <= 7 && afterMonthly) {
     const range = previousMonth(today);
     if (!published[`monthly:${range.start.slice(0, 7)}`] && hasReports(range.start, range.end)) tasksToRun.push(() => runSummary("monthly", range.start, range.end, false));
   }
@@ -67,12 +78,11 @@ async function catchUp(now: Date, timezone: string) {
 }
 
 export async function schedule() {
-  for (const task of tasks) task.stop();
-  tasks = [];
   const s = await getSettings();
   for (const [name, expr] of [["日报", s.schedule], ["周报", s.weeklySchedule], ["月报", s.monthlySchedule], ["晨间续接", s.morningSchedule]] as const) {
     if (!cron.validate(expr)) throw new Error(`${name}定时规则无效：${expr}，请使用 5 段 cron，例如 10 0 * * *。`);
   }
+  stopSchedule();
 
   tasks.push(cron.schedule(s.schedule, () => {
     const date = isoDate(new Date(), s.timezone);
@@ -95,5 +105,5 @@ export async function schedule() {
     createMorningBrief(date, false).catch(error => logRun({ status: "failed", kind: "morning", date, error: String(error) }));
   }, { timezone: s.timezone }));
 
-  void catchUp(new Date(), s.timezone);
+  void catchUpRun(() => catchUp(new Date(), s.timezone));
 }

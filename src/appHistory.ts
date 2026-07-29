@@ -26,8 +26,8 @@ function copilotActivities(date: string, settings: Settings): Activity[] {
   if (!db) return [];
   const out: Activity[] = [];
   try {
-    const rows = db.prepare("SELECT id, user_message, timestamp FROM turns WHERE user_message IS NOT NULL ORDER BY timestamp").all() as any[];
-    for (const row of rows) {
+    const rows = db.prepare("SELECT id, user_message, timestamp FROM turns WHERE user_message IS NOT NULL ORDER BY timestamp DESC LIMIT 10000").all() as any[];
+    for (const row of rows.reverse()) {
       const timestamp = String(row.timestamp ?? "");
       if (!timestamp || localDate(timestamp, settings.timezone) !== date) continue;
       const prompt = cleanPrompt(row.user_message);

@@ -31,8 +31,8 @@ if AudioObjectGetPropertyDataSize(AudioObjectID(kAudioObjectSystemObject), &proc
         for process in processes {
             guard let bundleID = readString(process, selector: kAudioProcessPropertyBundleID),
                   bundleID.localizedCaseInsensitiveContains("microsoft.teams") else { continue }
-            if readUInt32(process, selector: kAudioProcessPropertyIsRunningInput) != 0 ||
-                readUInt32(process, selector: kAudioProcessPropertyIsRunningOutput) != 0 {
+            // 只以 Teams 正在播放远端声音作为通话主信号；麦克风输入不能单独触发录制。
+            if readUInt32(process, selector: kAudioProcessPropertyIsRunningOutput) != 0 {
                 teamsProcessAudioRunning = true
             }
         }

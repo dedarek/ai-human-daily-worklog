@@ -12,7 +12,8 @@ const dataDir = process.env.WORKLOG_DATA_DIR || (process.platform === "darwin"
 const checks = [];
 const add = (name, ok, detail) => checks.push({ name, ok, detail });
 
-add("Node.js", Number(process.versions.node.split(".")[0]) >= 20, process.version);
+const [nodeMajor, nodeMinor] = process.versions.node.split(".").map(Number);
+add("Node.js", nodeMajor > 22 || (nodeMajor === 22 && nodeMinor >= 13), `${process.version}（最低 22.13）`);
 const whisperCli = process.env.WORKLOG_BUNDLED_WHISPER_CLI || (process.platform === "darwin" ? "/opt/homebrew/bin/whisper-cli" : "");
 if (process.platform === "darwin") add("本地转写程序", existsSync(whisperCli), existsSync(whisperCli) ? whisperCli : "未安装");
 try {

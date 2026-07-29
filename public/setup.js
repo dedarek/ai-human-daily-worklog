@@ -2,7 +2,10 @@ const $ = selector => document.querySelector(selector);
 const notice = message => $("#notice").textContent = message || "";
 
 async function json(url, options) {
-  const response = await fetch(url, options); const body = await response.json();
+  const mutating = options && !["GET", "HEAD"].includes(String(options.method || "GET").toUpperCase());
+  const request = options ? { ...options, ...(mutating && options.body === undefined ? { body: "{}" } : {}), headers: { ...(options.headers || {}), ...(mutating ? { "Content-Type": "application/json", "X-Worklog-Request": "1" } : {}) } } : options;
+  const response = await fetch(url, request); const text = await response.text();
+  let body; try { body = text ? JSON.parse(text) : {}; } catch { throw new Error(`本地服务返回了无法解析的响应（HTTP ${response.status}）`); }
   if (!response.ok) throw new Error(body.error || "请求失败"); return body;
 }
 
@@ -48,8 +51,9 @@ async function refresh() {
   ];
   $("#summary").innerHTML = checks.map(([ok, label]) => `<span class="${ok ? "ok" : "warn"}">${ok ? "✓" : "○"} ${label}</span>`).join("　");
   $("#finishSetup").disabled = !status.complete;
-  const completed = checks.filter(([ok]) => ok).length;
-  document.querySelectorAll("#progress span").forEach((item, index) => item.className = index < Math.ceil(completed / 1.25) ? "done" : index === Math.floor(completed / 1.25) ? "active" : "");
+  const steps = [checks[0][0], larkVerified || settings.markdownOutputEnabled, status.llmConfigured && (status.wikiConfigured || settings.markdownOutputEnabled) && checks[4][0], status.complete];
+  const active = steps.findIndex(done => !done);
+  document.querySelectorAll("#progress span").forEach((item, index) => item.className = steps[index] ? "done" : index === (active < 0 ? 3 : active) ? "active" : "");
   return status;
 }
 
@@ -84,4 +88,4 @@ $("#refresh").addEventListener("click", () => refresh().catch(error => notice(er
 $("#finishSetup").addEventListener("click", () => location.href = "/");
 
 refresh().catch(error => notice(error.message));
-setInterval(() => refresh().catch(() => {}), 2500);
+setInterval(() => { if (document.visibilityState === "visible") refresh().catch(() => {}); }, 2500);

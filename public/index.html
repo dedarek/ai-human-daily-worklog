@@ -168,6 +168,8 @@
               <label class="switch-row"><span><b>敏感信息过滤</b><small>写入前过滤 API Key、Token、密码和私钥</small></span><input name="redactionEnabled" type="checkbox" /></label>
               <label>额外敏感词（每行一个）<textarea name="redactionTerms" rows="4" placeholder="客户名&#10;内部项目代号"></textarea></label>
               <label class="switch-row warning"><span><b>暂停所有工作采集</b><small>已有会议不会被强行中断</small></span><input name="capturePaused" type="checkbox" /></label>
+              <label class="switch-row"><span><b>自动清理原始数据</b><small>仅清理本地操作证据和已处理会议音频，不删除日报</small></span><input name="retentionEnabled" type="checkbox" /></label>
+              <div class="form-grid wide"><label>操作证据保留天数<input name="evidenceRetentionDays" type="number" min="1" max="3650" /></label><label>会议音频保留天数<input name="meetingAudioRetentionDays" type="number" min="0" max="3650" /><small>设为 0 表示处理完成后即可清理</small></label></div>
             </div>
           </details>
 

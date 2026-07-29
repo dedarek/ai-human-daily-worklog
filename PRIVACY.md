@@ -7,7 +7,7 @@ Worklog is a local-first personal work archive. It is designed to make collectio
 - frontmost application names and window titles during the configured work window;
 - supported Agent task titles, user prompts, selected tool calls, commands, and file operations;
 - explicitly captured terminal commands;
-- on macOS, Microsoft Teams system playback audio, local transcripts, and useful meeting summaries;
+- on macOS, audio playback scoped to Microsoft Teams application processes, local transcripts, and useful meeting summaries;
 - generated daily, weekly, and monthly reports;
 - local configuration, run history, evidence manifests, and publishing indexes.
 
@@ -28,6 +28,10 @@ Runtime data uses the operating system's standard per-user location: `~/Library/
 
 LLM API keys use macOS Keychain, Windows DPAPI for the current user, or Linux Secret Service when available. On a headless Linux environment without Secret Service, Worklog falls back to an owner-only `secrets.json`; `WORKLOG_LLM_API_KEY` can be used instead to avoid that fallback. The legacy source-tree `data/` migration applies only to the default macOS data directory.
 
+Worklog creates new runtime files with owner-only permissions and repairs permissions on data migrated from earlier versions. JSON state is written through a temporary file and atomic rename; malformed state is reported instead of silently replaced with empty defaults.
+
+Automatic retention can be enabled in Settings. Operation evidence and processed meeting audio have independent retention periods; reports remain until the user deletes them. Retention is disabled when upgrading an existing installation so historical recordings are never deleted without an explicit choice.
+
 ## Remote transfers
 
 Worklog does not run a Worklog-owned cloud service. When report generation is enabled, filtered text evidence and useful transcript excerpts are sent to the LLM endpoint configured by the user. When publishing is enabled, final reports are sent to the configured destination, currently Feishu.
@@ -43,6 +47,7 @@ Raw meeting audio is not sent to the LLM or publishing destination.
 - disable local Markdown export;
 - choose the LLM endpoint, model, and publishing destination;
 - keep Markdown reports in a user-controlled local directory.
+- enable automatic cleanup and choose evidence/audio retention periods.
 
 ## Redaction
 

@@ -1,11 +1,12 @@
 import { createHash, randomUUID } from "node:crypto";
 import { execFile, spawn } from "node:child_process";
 import { existsSync } from "node:fs";
-import { cp, mkdir, readFile, writeFile, appendFile, readdir } from "node:fs/promises";
+import { chmod, cp, mkdir, readFile, appendFile, readdir, rename, stat } from "node:fs/promises";
 import { promisify } from "node:util";
 import { join } from "node:path";
 import type { Secrets, Settings } from "./types.js";
 import { defaultDataDir, worklogPlatform } from "./platform.js";
+import { atomicWriteFile } from "./jsonStore.js";
 
 const exec = promisify(execFile);
 const legacyDataDir = join(process.cwd(), "data");
@@ -13,6 +14,21 @@ const platformDataDir = defaultDataDir();
 export const dataDir = process.env.WORKLOG_DATA_DIR || platformDataDir;
 const settingsFile = join(dataDir, "settings.json");
 const keychainService = "MacWorklogFeishu";
+
+async function secureExistingData(root: string) {
+  const marker = join(root, ".permissions-v1");
+  if (existsSync(marker)) return;
+  async function walk(directory: string) {
+    await chmod(directory, 0o700).catch(() => {});
+    for (const entry of await readdir(directory, { withFileTypes: true }).catch(() => [])) {
+      const path = join(directory, entry.name);
+      if (entry.isDirectory()) await walk(path);
+      else if (entry.isFile()) await chmod(path, 0o600).catch(() => {});
+    }
+  }
+  await walk(root);
+  await atomicWriteFile(marker, JSON.stringify({ securedAt: new Date().toISOString() }));
+}
 
 export const defaults: Settings = {
   schedule: "0 18 * * 1-5",
@@ -36,22 +52,35 @@ export const defaults: Settings = {
   teamsAutoRecord: worklogPlatform() === "macos",
   whisperCliPath: process.env.WORKLOG_BUNDLED_WHISPER_CLI || (worklogPlatform() === "windows" ? join(dataDir, "bin", "whisper-cli.exe") : worklogPlatform() === "linux" ? "/usr/local/bin/whisper-cli" : "/opt/homebrew/bin/whisper-cli"),
   whisperModelPath: join(dataDir, "models", "ggml-small.bin"),
+  retentionEnabled: false,
+  evidenceRetentionDays: 30,
+  meetingAudioRetentionDays: 7,
 };
 
 export async function setupStore() {
-  await mkdir(dataDir, { recursive: true });
-  if (worklogPlatform() !== "macos" || dataDir !== platformDataDir || dataDir === legacyDataDir || existsSync(join(dataDir, ".migration-complete")) || existsSync(join(dataDir, "settings.json"))) return;
-  if (!existsSync(legacyDataDir)) return;
-  for (const entry of await readdir(legacyDataDir)) await cp(join(legacyDataDir, entry), join(dataDir, entry), { recursive: true, force: false, errorOnExist: false });
-  await writeFile(join(dataDir, ".migration-complete"), JSON.stringify({ from: legacyDataDir, migratedAt: new Date().toISOString() }), { mode: 0o600 });
+  await mkdir(dataDir, { recursive: true, mode: 0o700 });
+  await chmod(dataDir, 0o700).catch(() => {});
+  const migrate = worklogPlatform() === "macos" && dataDir === platformDataDir && dataDir !== legacyDataDir
+    && !existsSync(join(dataDir, ".migration-complete")) && !existsSync(join(dataDir, "settings.json")) && existsSync(legacyDataDir);
+  if (migrate) {
+    for (const entry of await readdir(legacyDataDir)) await cp(join(legacyDataDir, entry), join(dataDir, entry), { recursive: true, force: false, errorOnExist: false });
+    await atomicWriteFile(join(dataDir, ".migration-complete"), JSON.stringify({ from: legacyDataDir, migratedAt: new Date().toISOString() }));
+  }
+  await secureExistingData(dataDir);
 }
 export async function getSettings(): Promise<Settings> {
-  try { return { ...defaults, ...JSON.parse(await readFile(settingsFile, "utf8")) }; }
-  catch { return defaults; }
+  let raw: string;
+  try { raw = await readFile(settingsFile, "utf8"); }
+  catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") return { ...defaults };
+    throw error;
+  }
+  try { return { ...defaults, ...JSON.parse(raw) }; }
+  catch (error) { throw new Error(`配置文件已损坏，已停止使用默认值覆盖：${settingsFile}`, { cause: error }); }
 }
 export async function saveSettings(settings: Settings) {
   await setupStore();
-  await writeFile(settingsFile, JSON.stringify(settings, null, 2), { mode: 0o600 });
+  await atomicWriteFile(settingsFile, JSON.stringify(settings, null, 2));
 }
 async function keychain(command: "add-generic-password" | "find-generic-password", account: string, value?: string) {
   const args = command === "add-generic-password"
@@ -85,7 +114,7 @@ export async function saveSecrets(secrets: Partial<Secrets>) {
   if (worklogPlatform() === "windows") {
     const script = "$plain=[Console]::In.ReadToEnd(); ConvertFrom-SecureString (ConvertTo-SecureString $plain -AsPlainText -Force)";
     const encrypted = await runWithInput(powershell(), ["-NoProfile", "-NonInteractive", "-Command", script], secrets.llmApiKey, windowsPowerShellEnv());
-    await writeFile(join(dataDir, "secrets.dpapi"), encrypted, { mode: 0o600 });
+    await atomicWriteFile(join(dataDir, "secrets.dpapi"), encrypted);
     return;
   }
   try {
@@ -93,7 +122,7 @@ export async function saveSecrets(secrets: Partial<Secrets>) {
     return;
   } catch { /* headless Linux may not provide Secret Service */ }
   // Linux fallback for environments without Secret Service. Directory and file are owner-only.
-  await writeFile(join(dataDir, "secrets.json"), JSON.stringify({ llmApiKey: secrets.llmApiKey }), { mode: 0o600 });
+  await atomicWriteFile(join(dataDir, "secrets.json"), JSON.stringify({ llmApiKey: secrets.llmApiKey }));
 }
 export async function getSecrets(): Promise<Secrets> {
   if (worklogPlatform() === "macos") {
@@ -118,5 +147,9 @@ export async function getSecrets(): Promise<Secrets> {
 export const sha256 = (text: string) => createHash("sha256").update(text).digest("hex");
 export async function logRun(entry: object) {
   await setupStore();
-  await appendFile(join(dataDir, "runs.jsonl"), JSON.stringify({ id: randomUUID(), at: new Date().toISOString(), ...entry }) + "\n");
+  const path = join(dataDir, "runs.jsonl");
+  const size = await stat(path).then(value => value.size).catch(() => 0);
+  if (size > 5 * 1024 * 1024) await rename(path, `${path}.1`).catch(() => {});
+  await appendFile(path, JSON.stringify({ id: randomUUID(), at: new Date().toISOString(), ...entry }) + "\n", { mode: 0o600 });
+  await chmod(path, 0o600).catch(() => {});
 }

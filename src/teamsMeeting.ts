@@ -1,23 +1,25 @@
 import { randomUUID } from "node:crypto";
 import { execFile, spawn, type ChildProcess } from "node:child_process";
 import { createReadStream, createWriteStream, existsSync } from "node:fs";
-import { appendFile, mkdir, readFile, rm, stat, writeFile } from "node:fs/promises";
-import { join } from "node:path";
+import { appendFile, mkdir, readFile, rm, stat, unlink, writeFile } from "node:fs/promises";
+import { dirname, join } from "node:path";
 import { finished, pipeline } from "node:stream/promises";
 import { promisify } from "node:util";
 import { writeMeetingMinutes } from "./llm.js";
 import { dataDir, getSecrets, getSettings, logRun } from "./store.js";
-import { readJson, updateJson } from "./jsonStore.js";
+import { atomicWriteFile, createMutex, readJson, updateJson } from "./jsonStore.js";
 import { hasMeetingSignal, isMeetingTitle, isMeetingWindow, transcriptQuality } from "./meetingDetect.js";
 import { redact } from "./redact.js";
 import { meetingTitle } from "./titles.js";
-import type { MeetingRecord, Settings } from "./types.js";
+import type { MeetingRecord } from "./types.js";
 import { worklogPlatform } from "./platform.js";
 
 const exec = promisify(execFile);
 const meetingsFile = join(dataDir, "meetings.json");
 const nativeDetector = join(dataDir, "bin", "teams-audio-status");
 const systemAudioCapture = join(dataDir, "bin", "system-audio-capture");
+const capturePidFile = join(dataDir, "meetings", "capture.pid");
+const processMeeting = createMutex();
 
 type AudioStatus = {
   teamsProcessAudioRunning: boolean;
@@ -142,6 +144,7 @@ async function startCapture(audioPath: string) {
     throw error;
   }
   audioCapture = capture;
+  if (capture.pid) await atomicWriteFile(capturePidFile, String(capture.pid));
 }
 
 export function wavHeader(dataBytes: number) {
@@ -196,7 +199,11 @@ async function appendMeetingActivities(record: MeetingRecord, report: string, ti
   if (lines) await appendFile(join(dir, "meetings.jsonl"), `${lines}\n`, { mode: 0o600 });
 }
 
-async function transcribeAndPublish(record: MeetingRecord) {
+function safeMeetingError(error: unknown) {
+  return String(error instanceof Error ? error.message : error).replaceAll(dataDir, "[Worklog 数据目录]").slice(0, 500);
+}
+
+async function transcribeAndPublishUnlocked(record: MeetingRecord) {
   const settings = await getSettings(); const secrets = await getSecrets();
   const transcriptBase = record.transcriptPath!.replace(/\.txt$/, "");
   try {
@@ -214,13 +221,14 @@ async function transcribeAndPublish(record: MeetingRecord) {
         await logRun({ status: "meeting_ignored", kind: "meeting", meetingId: record.id, title: record.title, reason: record.error });
         return;
       }
-      await exec(settings.whisperCliPath, ["-m", settings.whisperModelPath, "-f", record.audioPath!, "-l", "auto", "-otxt", "-of", transcriptBase, "-nt", "-np"], { timeout: 3_600_000, maxBuffer: 20 * 1024 * 1024 });
+      const timeout = Math.min(12 * 3_600_000, Math.max(3_600_000, (record.durationSeconds || 1800) * 2000));
+      await exec(settings.whisperCliPath, ["-m", settings.whisperModelPath, "-f", record.audioPath!, "-l", "auto", "-otxt", "-of", transcriptBase, "-nt", "-np"], { timeout, maxBuffer: 20 * 1024 * 1024 });
       transcript = (await readFile(record.transcriptPath!, "utf8")).trim();
     }
     const quality = transcriptQuality(transcript);
     if (!quality.valid) {
       record.status = "ignored";
-      record.transcriptPreview = transcript.slice(0, 240);
+      record.transcriptPreview = (settings.redactionEnabled ? redact(transcript, settings.redactionTerms) : transcript).slice(0, 240);
       record.error = `${quality.reason}，未纳入日报。`;
       await saveMeeting(record);
       await logRun({ status: "meeting_ignored", kind: "meeting", meetingId: record.id, title: record.title, reason: quality.reason });
@@ -244,22 +252,22 @@ async function transcribeAndPublish(record: MeetingRecord) {
     await saveMeeting(record);
     await logRun({ status: "meeting_included", kind: "meeting", meetingId: record.id, title: record.title, startedAt: record.startedAt, endedAt: record.endedAt });
   } catch (error) {
-    record.status = "failed"; record.error = String(error); await saveMeeting(record);
-    await logRun({ status: "failed", kind: "meeting", meetingId: record.id, title: record.title, error: String(error) });
+    const message = safeMeetingError(error);
+    record.status = "failed"; record.error = message; await saveMeeting(record);
+    await logRun({ status: "failed", kind: "meeting", meetingId: record.id, title: record.title, error: message });
   }
 }
+
+const transcribeAndPublish = (record: MeetingRecord) => processMeeting(() => transcribeAndPublishUnlocked(record));
 
 export async function retryTeamsMeeting(id: string) {
   if (current?.id === id) throw new Error("该会议仍在录制，请结束后再重试。");
   const record = (await loadMeetings()).find(item => item.id === id);
   if (!record) throw new Error("未找到该会议记录。");
-  if (!record.endedAt || !record.transcriptPath || !existsSync(record.transcriptPath)) {
-    throw new Error("该会议没有可复用的逐字稿，无法重试整理。");
-  }
-  if (!(await readFile(record.transcriptPath, "utf8")).trim()) {
-    throw new Error("该会议的逐字稿为空，无法重试整理。");
-  }
-  record.status = "summarizing";
+  if (!record.endedAt || (!record.audioPath || !existsSync(record.audioPath)) && (!record.transcriptPath || !existsSync(record.transcriptPath))) throw new Error("该会议没有可复用的音频或逐字稿，无法重试。");
+  if (!record.transcriptPath && record.audioPath) record.transcriptPath = join(dirname(record.audioPath), "transcript.txt");
+  if (!record.reportPath && record.audioPath) record.reportPath = join(dirname(record.audioPath), "minutes.md");
+  record.status = record.transcriptPath && existsSync(record.transcriptPath) && (await readFile(record.transcriptPath, "utf8")).trim() ? "summarizing" : "transcribing";
   delete record.error;
   await saveMeeting(record);
   await transcribeAndPublish(record);
@@ -292,7 +300,7 @@ export async function stopTeamsMeeting() {
   audioCapture.kill("SIGTERM");
   const forceKill = setTimeout(() => audioCapture?.kill("SIGKILL"), 8000);
   try { await captureClosed; await finalizeWav(rawAudioPath, record.audioPath!); }
-  finally { audioCapture = null; captureClosed = null; rawAudioPath = ""; current = null; }
+  finally { audioCapture = null; captureClosed = null; rawAudioPath = ""; current = null; await unlink(capturePidFile).catch(() => {}); }
   clearTimeout(forceKill);
   void transcribeAndPublish(record);
   return record;
@@ -341,9 +349,15 @@ async function poll() {
 // 转写/整理阶段若音频仍在则续跑，否则标记失败，避免记录永久卡住。
 export async function recoverMeetings() {
   if (worklogPlatform() !== "macos") return;
-  // 服务异常退出时清理遗留的系统音频与 WAV 封装进程。
-  try { await exec("/usr/bin/pkill", ["-KILL", "-f", systemAudioCapture], { timeout: 3000 }); } catch { /* no stale capture */ }
-  try { await exec("/usr/bin/pkill", ["-KILL", "-f", `${dataDir}/meetings/.*/audio\\.wav`], { timeout: 3000 }); } catch { /* no stale recorder */ }
+  // 只清理 Worklog 自己记录的精确 PID，并核对命令路径，避免 pkill 模式误伤无关进程。
+  try {
+    const pid = Number((await readFile(capturePidFile, "utf8")).trim());
+    if (Number.isInteger(pid) && pid > 1) {
+      const command = (await exec("/bin/ps", ["-p", String(pid), "-o", "command="], { timeout: 3000 })).stdout;
+      if (command.includes(systemAudioCapture)) process.kill(pid, "SIGKILL");
+    }
+  } catch { /* no stale owned capture */ }
+  await unlink(capturePidFile).catch(() => {});
   const records = await loadMeetings();
   for (const record of records) {
     if (record.status === "recording") {
@@ -364,16 +378,23 @@ export async function recoverMeetings() {
   }
 }
 
-export function startTeamsMonitor() {
+export async function startTeamsMonitor() {
   if (monitorTimer) clearInterval(monitorTimer);
   if (worklogPlatform() !== "macos") {
     lastStatus = { ...lastStatus, supported: false, platform: worklogPlatform(), monitoring: false, lastError: "当前平台暂不支持 Teams 系统音频采集。" };
     return;
   }
   lastStatus.monitoring = true;
-  void recoverMeetings().catch(error => void logRun({ status: "failed", kind: "meeting", error: `恢复历史会议失败：${String(error)}` }));
+  await recoverMeetings().catch(error => void logRun({ status: "failed", kind: "meeting", error: `恢复历史会议失败：${safeMeetingError(error)}` }));
   monitorTimer = setInterval(() => void poll(), 5000);
   void poll();
+}
+
+export async function stopTeamsMonitor() {
+  if (monitorTimer) clearInterval(monitorTimer);
+  monitorTimer = undefined;
+  lastStatus.monitoring = false;
+  if (current && audioCapture && captureClosed) await stopTeamsMeeting();
 }
 
 export function getTeamsMeetingStatus() {

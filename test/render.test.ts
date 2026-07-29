@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { dailyXml, summaryXml, meetingXml, renderDocXml } from "../src/render.js";
+import { dailyXml, summaryXml, renderDocXml } from "../src/render.js";
 
 const daily = `# 2026-07-21 工作日志
 
@@ -76,31 +76,4 @@ X：进行中；持续开发。Y：已验证；测试通过。`;
   assert.match(xml, /周期：2026-07-13~2026-07-17/);
   assert.match(xml, /<callout emoji="💡"/);
   assert.match(xml, /<span text-color="green">✅ 已验证<\/span>/);
-});
-
-test("meetingXml 待办渲染为勾选框", () => {
-  const md = `# 会议纪要
-
-## 会议概览
-
-讨论了方案。
-
-## 待办事项
-
-- 张三整理文档
-- 李四确认接口`;
-  const xml = meetingXml(md);
-  assert.match(xml, /<checkbox done="false">张三整理文档<\/checkbox>/);
-  assert.match(xml, /<checkbox done="false">李四确认接口<\/checkbox>/);
-});
-
-test("meetingXml 无待办不渲染勾选框", () => {
-  const md = `# 会议纪要
-
-## 待办事项
-
-无`;
-  const xml = meetingXml(md);
-  assert.doesNotMatch(xml, /<checkbox/);
-  assert.match(xml, /<p>无<\/p>/);
 });

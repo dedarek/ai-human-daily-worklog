@@ -3,6 +3,8 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { homedir } from "node:os";
 
+process.umask(0o077);
+
 const root = dirname(dirname(fileURLToPath(import.meta.url)));
 const baseDir = process.env.WORKLOG_DATA_DIR || (process.platform === "darwin"
   ? join(homedir(), "Library", "Application Support", "Worklog")

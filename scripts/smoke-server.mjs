@@ -21,13 +21,20 @@ try {
   for (let attempt = 0; attempt < 50; attempt += 1) {
     try {
       const response = await fetch(`http://127.0.0.1:${port}/api/status`);
-      if (response.ok) { status = await response.json(); break; }
+      if (response.ok) {
+        if (!response.headers.get("content-security-policy") || response.headers.has("x-powered-by")) throw new Error("local API security headers are missing");
+        status = await response.json(); break;
+      }
     } catch { /* server is still starting */ }
     await new Promise(resolve => setTimeout(resolve, 100));
   }
   if (!status?.running) throw new Error(`server did not become ready\n${output}`);
   if (!status.capabilities?.platform) throw new Error("platform capabilities are missing");
   if (!status.morningSchedule) throw new Error("morning schedule is missing");
+  const traversal = await fetch(`http://127.0.0.1:${port}/api/work-graph?date=${encodeURIComponent("../../escape")}`);
+  if (traversal.status !== 400) throw new Error("date path traversal was not rejected");
+  const csrf = await fetch(`http://127.0.0.1:${port}/api/capture`, { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" });
+  if (csrf.status !== 403) throw new Error("unmarked local API mutation was not rejected");
   const graphResponse = await fetch(`http://127.0.0.1:${port}/api/work-graph?date=2026-07-30`);
   if (!graphResponse.ok || !(await graphResponse.json()).projects) throw new Error("work graph endpoint failed");
   const searchResponse = await fetch(`http://127.0.0.1:${port}/api/search?q=${encodeURIComponent("跨平台安装包")}`);

@@ -27,12 +27,18 @@ final class WorklogApp: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNav
     private var capturePaused = false
     private var todayURL = ""
     private var serverReady = false
+    private var serviceToken = ""
+    private var instanceLockFD: Int32 = -1
+    private var launchingService = false
+    private var nextRestartAt = Date.distantPast
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory)
+        guard acquireInstanceLock() else { NSApp.terminate(nil); return }
         installBundledHelpers()
         buildMenu()
         migrateLegacyLaunchAgent()
+        serviceToken = (try? String(contentsOf: dataURL.appendingPathComponent("service-token"), encoding: .utf8))?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         startServiceIfNeeded()
         configureLoginItem()
         pollTimer = Timer.scheduledTimer(withTimeInterval: 5, repeats: true) { [weak self] _ in self?.refreshStatus() }
@@ -42,6 +48,13 @@ final class WorklogApp: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNav
     func applicationWillTerminate(_ notification: Notification) {
         pollTimer?.invalidate()
         if let service, service.isRunning { service.terminate() }
+        if instanceLockFD >= 0 { flock(instanceLockFD, LOCK_UN); close(instanceLockFD) }
+    }
+
+    private func acquireInstanceLock() -> Bool {
+        try? FileManager.default.createDirectory(at: dataURL, withIntermediateDirectories: true)
+        instanceLockFD = Darwin.open(dataURL.appendingPathComponent("menu-app.lock").path, O_CREAT | O_RDWR, S_IRUSR | S_IWUSR)
+        return instanceLockFD >= 0 && flock(instanceLockFD, LOCK_EX | LOCK_NB) == 0
     }
 
     private func buildMenu() {
@@ -81,6 +94,8 @@ final class WorklogApp: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNav
     private func installBundledHelpers() {
         let target = dataURL.appendingPathComponent("bin", isDirectory: true)
         try? FileManager.default.createDirectory(at: target, withIntermediateDirectories: true)
+        try? FileManager.default.setAttributes([.posixPermissions: 0o700], ofItemAtPath: dataURL.path)
+        try? FileManager.default.setAttributes([.posixPermissions: 0o700], ofItemAtPath: target.path)
         for name in ["teams-audio-status", "system-audio-capture", "permission-status"] {
             let source = resourceURL.appendingPathComponent("bin/\(name)")
             let destination = target.appendingPathComponent(name)
@@ -119,11 +134,14 @@ final class WorklogApp: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNav
     }
 
     private func launchBundledService() {
+        guard !launchingService, service?.isRunning != true else { return }
+        launchingService = true
+        nextRestartAt = Date().addingTimeInterval(10)
         let node = resourceURL.appendingPathComponent("runtime/node")
         let root = resourceURL.appendingPathComponent("server", isDirectory: true)
         let entry = root.appendingPathComponent("dist/server.js")
         guard FileManager.default.isExecutableFile(atPath: node.path), FileManager.default.fileExists(atPath: entry.path) else {
-            updateStatus("安装包缺少后台组件", healthy: false)
+            launchingService = false; updateStatus("安装包缺少后台组件", healthy: false)
             return
         }
         let process = Process()
@@ -133,6 +151,11 @@ final class WorklogApp: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNav
         var environment = ProcessInfo.processInfo.environment
         environment["WORKLOG_DATA_DIR"] = dataURL.path
         environment["WORKLOG_PORT"] = worklogPort
+        serviceToken = UUID().uuidString
+        try? FileManager.default.createDirectory(at: dataURL, withIntermediateDirectories: true)
+        try? serviceToken.write(to: dataURL.appendingPathComponent("service-token"), atomically: true, encoding: .utf8)
+        try? FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: dataURL.appendingPathComponent("service-token").path)
+        environment["WORKLOG_DESKTOP_TOKEN"] = serviceToken
         environment["WORKLOG_BUNDLED_LARK_CLI"] = root.appendingPathComponent("node_modules/@larksuite/cli/scripts/run.js").path
         let whisper = resourceURL.appendingPathComponent("bin/whisper-cli")
         if FileManager.default.isExecutableFile(atPath: whisper.path) { environment["WORKLOG_BUNDLED_WHISPER_CLI"] = whisper.path }
@@ -142,10 +165,11 @@ final class WorklogApp: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNav
         try? FileManager.default.createDirectory(at: logDirectory, withIntermediateDirectories: true)
         let logURL = logDirectory.appendingPathComponent("app-service.log")
         FileManager.default.createFile(atPath: logURL.path, contents: nil)
+        try? FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: logURL.path)
         if let handle = try? FileHandle(forWritingTo: logURL) { handle.seekToEndOfFile(); process.standardOutput = handle; process.standardError = handle }
         process.terminationHandler = { [weak self] _ in DispatchQueue.main.async { self?.serverReady = false; self?.updateStatus("后台服务已停止", healthy: false) } }
-        do { try process.run(); service = process }
-        catch { updateStatus("无法启动后台服务", healthy: false); return }
+        do { try process.run(); service = process; launchingService = false }
+        catch { launchingService = false; updateStatus("无法启动后台服务", healthy: false); return }
         DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) { [weak self] in self?.refreshStatus(openSetupWhenReady: true) }
     }
 
@@ -174,6 +198,7 @@ final class WorklogApp: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNav
             case .failure:
                 self.serverReady = false
                 self.updateStatus("后台服务未连接", healthy: false)
+                if Date() >= self.nextRestartAt { self.launchBundledService() }
             }
         }
     }
@@ -188,12 +213,16 @@ final class WorklogApp: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNav
     private func request(path: String, method: String = "GET", body: [String: Any]? = nil, completion: @escaping (Result<[String: Any], Error>) -> Void) {
         var request = URLRequest(url: serverBase.appendingPathComponent(path))
         request.httpMethod = method
-        request.timeoutInterval = 4
-        if let body { request.httpBody = try? JSONSerialization.data(withJSONObject: body); request.setValue("application/json", forHTTPHeaderField: "Content-Type") }
+        request.timeoutInterval = path == "/api/run" ? 15 * 60 : 4
+        if let body { request.httpBody = try? JSONSerialization.data(withJSONObject: body); request.setValue("application/json", forHTTPHeaderField: "Content-Type"); request.setValue("1", forHTTPHeaderField: "X-Worklog-Request") }
         URLSession.shared.dataTask(with: request) { data, response, error in
             if let error { DispatchQueue.main.async { completion(.failure(error)) }; return }
-            guard let data, let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+            guard let http = response as? HTTPURLResponse, let data, let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
                 DispatchQueue.main.async { completion(.failure(NSError(domain: "Worklog", code: 1))) }; return
+            }
+            guard (200..<300).contains(http.statusCode) else {
+                let message = object["error"] as? String ?? "Worklog 请求失败（HTTP \(http.statusCode)）"
+                DispatchQueue.main.async { completion(.failure(NSError(domain: "Worklog", code: http.statusCode, userInfo: [NSLocalizedDescriptionKey: message]))) }; return
             }
             DispatchQueue.main.async { completion(.success(object)) }
         }.resume()
@@ -215,14 +244,15 @@ final class WorklogApp: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNav
     func windowWillClose(_ notification: Notification) { window = nil }
 
     func webView(_ webView: WKWebView, createWebViewWith configuration: WKWebViewConfiguration, for navigationAction: WKNavigationAction, windowFeatures: WKWindowFeatures) -> WKWebView? {
-        if let url = navigationAction.request.url { NSWorkspace.shared.open(url) }
+        if let url = navigationAction.request.url, url.scheme == "https" || url.scheme == "http" { NSWorkspace.shared.open(url) }
         return nil
     }
 
     func webView(_ webView: WKWebView, decidePolicyFor navigationAction: WKNavigationAction, decisionHandler: @escaping (WKNavigationActionPolicy) -> Void) {
-        if let host = navigationAction.request.url?.host, host != "127.0.0.1" && host != "localhost" {
-            NSWorkspace.shared.open(navigationAction.request.url!); decisionHandler(.cancel)
-        } else { decisionHandler(.allow) }
+        guard let url = navigationAction.request.url else { decisionHandler(.cancel); return }
+        if url.scheme == "http" && (url.host == "127.0.0.1" || url.host == "localhost") { decisionHandler(.allow); return }
+        if url.scheme == "https" || url.scheme == "http" { NSWorkspace.shared.open(url) }
+        decisionHandler(.cancel)
     }
 
     @objc private func openDashboard() { showWindow(path: "/", title: "Worklog") }
@@ -236,7 +266,10 @@ final class WorklogApp: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNav
         catch { updateStatus("无法更新登录启动设置", healthy: false) }
         loginItemMenuItem.state = SMAppService.mainApp.status == .enabled ? .on : .off
     }
-    @objc private func quit() { NSApp.terminate(nil) }
+    @objc private func quit() {
+        guard !serviceToken.isEmpty else { NSApp.terminate(nil); return }
+        request(path: "/api/shutdown", method: "POST", body: ["token": serviceToken]) { _ in NSApp.terminate(nil) }
+    }
 }
 
 private extension Result {

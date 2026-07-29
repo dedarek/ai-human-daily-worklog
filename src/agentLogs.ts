@@ -13,12 +13,12 @@ const home = homedir();
 // 从各 agent 日志提取真实用户提问时，剔除系统注入内容（环境上下文、命令回显、工具结果、元消息）与低信号短语。
 const STOP_PROMPTS = new Set(["继续", "ok", "好的", "嗯", "是的", "可以", "行", "对", "yes", "y", "go", "next", "对的", "嗯嗯"]);
 export function cleanPrompt(text: unknown): string {
-  const raw = String(text ?? "").replace(/\s+/g, " ").trim();
+  let source = String(text ?? "");
+  const requestMarker = source.lastIndexOf("## My request for Codex:");
+  if (requestMarker >= 0) source = source.slice(requestMarker + "## My request for Codex:".length);
+  source = source.replace(/<(?:in-app-browser-context|environment_context|system-reminder)[^>]*>[\s\S]*?<\/(?:in-app-browser-context|environment_context|system-reminder)>/gi, " ");
+  const raw = source.replace(/\s+/g, " ").trim();
   if (!raw || raw.length < 3) return "";
-  if (raw.startsWith("<") || raw.startsWith("[")) return "";
-  // WHY：ChatGPT/Codex app 常把上一轮助手输出/上下文回显塞进 user turn，这类以 markdown 列表/强调符开头，非用户真实提问。
-  if (/^[•*#>]/.test(raw) || /^[-–—]\s/.test(raw)) return "";
-  if (/^#\s*(Files|环境|Caveat)/i.test(raw)) return "";
   if (/^(command-name|local-command|environment_context|system-reminder)/i.test(raw)) return "";
   if (STOP_PROMPTS.has(raw.toLowerCase())) return "";
   return raw;
@@ -56,7 +56,9 @@ function claudeDetail(name: string, input: any) {
 async function claudeActivities(date: string, settings: Settings): Promise<Activity[]> {
   const activities: Activity[] = [];
   const usefulTools = new Set(["Bash", "Read", "Write", "Edit", "MultiEdit", "Agent", "TaskCreate", "Skill"]);
+  const cutoff = Date.parse(`${date}T00:00:00Z`) - 24 * 3600 * 1000;
   for (const file of await jsonlFiles(join(home, ".claude", "projects"))) {
+    try { if ((await stat(file)).mtimeMs < cutoff) continue; } catch { continue; }
     let lines: string[]; try { lines = (await readFile(file, "utf8")).split("\n"); } catch { continue; }
     for (const line of lines) {
       if (!line) continue;

@@ -1,6 +1,6 @@
 {
   "name": "worklog",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "main": "desktop/main.cjs",
   "desktopName": "worklog.desktop",
   "private": true,
@@ -17,7 +17,7 @@
     "dev": "tsx src/server.ts",
     "start": "tsx src/server.ts",
     "build": "tsc -p tsconfig.build.json",
-    "check": "tsc --noEmit && node --check public/app.js",
+    "check": "tsc --noEmit && node --check public/app.js && node --check public/setup.js && node --check desktop/main.cjs",
     "test": "node --import tsx --test test/*.test.ts",
     "smoke": "npm run build && node scripts/smoke-server.mjs",
     "smoke:credentials": "npm run build && node scripts/smoke-credentials.mjs",
@@ -32,18 +32,18 @@
     "build-linux": "npm run build && electron-builder --linux AppImage deb --x64 --publish never"
   },
   "engines": {
-    "node": ">=20"
+    "node": ">=22.13"
   },
   "dependencies": {
-    "@larksuite/cli": "^1.0.79",
+    "@larksuite/cli": "1.0.80",
     "express": "^5.1.0",
     "node-cron": "^4.2.1"
   },
   "devDependencies": {
     "@types/express": "^5.0.3",
     "@types/node": "^24.3.0",
-    "electron": "^38.8.6",
-    "electron-builder": "^26.15.3",
+    "electron": "43.2.0",
+    "electron-builder": "26.15.3",
     "tsx": "^4.20.5",
     "typescript": "^5.9.2"
   },
@@ -56,7 +56,22 @@
       "public/**/*",
       "desktop/**/*",
       "package.json",
-      "node_modules/**/*"
+      "node_modules/**/*",
+      "!node_modules/@larksuite/cli/bin/**/*"
+    ],
+    "extraResources": [
+      {
+        "from": "node_modules/@larksuite/cli/scripts",
+        "to": "lark-cli-runtime/scripts"
+      },
+      {
+        "from": "node_modules/@larksuite/cli/checksums.txt",
+        "to": "lark-cli-runtime/checksums.txt"
+      },
+      {
+        "from": "node_modules/@larksuite/cli/package.json",
+        "to": "lark-cli-runtime/package.json"
+      }
     ],
     "directories": {
       "output": "release/desktop",
