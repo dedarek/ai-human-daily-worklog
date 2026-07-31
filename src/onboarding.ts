@@ -69,8 +69,10 @@ export async function onboardingStatus() {
   const settings = await getSettings(); const secrets = await getSecrets();
   const capabilities = platformCapabilities();
   const native = getNativeState();
-  const screen = native ?? (capabilities.nativePermissions ? await jsonTool(audioTool, ["--permission-status"]) : { screenCapture: true });
-  const accessibility = native ?? (capabilities.nativePermissions ? await jsonTool(permissionTool, []) : { accessibility: true });
+  const helperScreen = capabilities.nativePermissions ? await jsonTool(audioTool, ["--permission-status"]) : { screenCapture: true };
+  const helperAccessibility = capabilities.nativePermissions ? await jsonTool(permissionTool, []) : { accessibility: true };
+  const screen = { screenCapture: native?.screenCapture === true || helperScreen.screenCapture === true };
+  const accessibility = { accessibility: native?.accessibility === true || helperAccessibility.accessibility === true };
   const lark = await larkInfo(settings);
   const bundledWhisper = process.env.WORKLOG_BUNDLED_WHISPER_CLI;
   const whisperCli = [settings.whisperCliPath, bundledWhisper, "/opt/homebrew/bin/whisper-cli", "/usr/local/bin/whisper-cli", join(dataDir, "bin", process.platform === "win32" ? "whisper-cli.exe" : "whisper-cli")].find(value => value && existsSync(value));
@@ -83,7 +85,7 @@ export async function onboardingStatus() {
   return {
     platform: worklogPlatform(),
     capabilities,
-    permissions: { required: capabilities.nativePermissions, source: native ? "app" : "helper", screenCapture: screen.screenCapture === true, accessibility: accessibility.accessibility === true },
+    permissions: { required: capabilities.nativePermissions, source: native ? "app+helper" : "helper", screenCapture: screen.screenCapture, accessibility: accessibility.accessibility },
     lark,
     larkLogin,
     llmConfigured: Boolean(secrets.llmApiKey && settings.llmBaseUrl && settings.llmModel),
@@ -99,6 +101,9 @@ export async function requestPermission(kind: "screen" | "accessibility") {
   if (native) {
     if (kind === "screen" && native.screenCapture) return { screenCapture: true };
     if (kind === "accessibility" && native.accessibility) return { accessibility: true };
+    const helper = kind === "screen" ? await jsonTool(audioTool, ["--permission-status"]) : await jsonTool(permissionTool, []);
+    if (kind === "screen" && helper.screenCapture === true) return { screenCapture: true };
+    if (kind === "accessibility" && helper.accessibility === true) return { accessibility: true };
     queueNativePermission(kind);
     return kind === "screen" ? { screenCapture: native.screenCapture } : { accessibility: native.accessibility };
   }

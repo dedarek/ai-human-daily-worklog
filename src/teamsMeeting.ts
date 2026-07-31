@@ -95,7 +95,7 @@ async function audioStatus(): Promise<AudioStatus> {
 
 async function screenCaptureGranted() {
   const native = getNativeState();
-  if (native) return native.screenCapture;
+  if (native?.screenCapture) return true;
   if (!existsSync(systemAudioCapture)) return false;
   try {
     const { stdout } = await exec(systemAudioCapture, ["--permission-status"], { timeout: 3000 });
