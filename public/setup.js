@@ -55,6 +55,10 @@ async function refresh() {
   const steps = [checks[0][0], larkVerified || settings.markdownOutputEnabled, status.llmConfigured && (status.wikiConfigured || settings.markdownOutputEnabled) && checks[4][0], status.complete];
   const active = steps.findIndex(done => !done);
   document.querySelectorAll("#progress span").forEach((item, index) => item.className = steps[index] ? "done" : index === (active < 0 ? 3 : active) ? "active" : "");
+  if (status.complete && location.pathname === "/setup.html") {
+    notice("配置已恢复，正在打开工作台…");
+    setTimeout(() => { location.href = "/"; }, 250);
+  }
   return status;
 }
 
@@ -95,4 +99,4 @@ const safeRefresh = async () => {
   try { await refresh(); } catch (error) { notice(error.message); } finally { refreshing = false; }
 };
 safeRefresh();
-setInterval(() => { if (document.visibilityState === "visible") void safeRefresh(); }, 10_000);
+setInterval(() => { if (document.visibilityState === "visible") void safeRefresh(); }, 2_000);

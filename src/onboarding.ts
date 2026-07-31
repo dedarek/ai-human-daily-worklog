@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { createReadStream, createWriteStream, existsSync } from "node:fs";
-import { mkdir, rename, rm, stat, statfs } from "node:fs/promises";
+import { mkdir, readFile, rename, rm, stat, statfs } from "node:fs/promises";
 import { join } from "node:path";
 import { pipeline } from "node:stream/promises";
 import { Readable } from "node:stream";
@@ -10,11 +10,13 @@ import { getNativeState, queueNativePermission } from "./nativeBridge.js";
 import { dataDir, getSecrets, getSettings, saveSettings } from "./store.js";
 import { findLarkCli, getLarkStatus, runLarkProcess } from "./larkCli.js";
 import { platformCapabilities, worklogPlatform } from "./platform.js";
+import { atomicWriteFile } from "./jsonStore.js";
 
 const exec = promisify(execFile);
 const modelUrl = "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-small.bin";
 const modelSha256 = "1be3a9b2063867b937e64e2ec7483364a79917e157fa98c5d94b5c1fffea987b";
 const modelPath = join(dataDir, "models", "ggml-small.bin");
+const modelVerificationPath = `${modelPath}.verified.json`;
 const permissionTool = join(dataDir, "bin", "permission-status");
 const audioTool = join(dataDir, "bin", "system-audio-capture");
 
@@ -41,11 +43,18 @@ async function fileSha256(path: string) {
 async function modelInfo() {
   if (!existsSync(modelPath)) return { installed: false, path: modelPath, bytes: 0, verified: false };
   const info = await stat(modelPath);
+  if (!modelVerification && !modelVerificationTask) {
+    const cached = await readFile(modelVerificationPath, "utf8").then(raw => JSON.parse(raw) as { size?: number; mtimeMs?: number; sha256?: string }).catch(() => null);
+    if (cached?.size === info.size && cached.mtimeMs === info.mtimeMs && cached.sha256 === modelSha256) {
+      modelVerification = { mtimeMs: info.mtimeMs, verified: true };
+    }
+  }
   if (modelVerification?.mtimeMs !== info.mtimeMs && !modelVerificationTask) {
     modelVerification = { mtimeMs: info.mtimeMs, verified: false, verifying: true };
     modelVerificationTask = (async () => {
       const verified = info.size === 487_601_967 && await fileSha256(modelPath) === modelSha256;
       modelVerification = { mtimeMs: info.mtimeMs, verified };
+      if (verified) await atomicWriteFile(modelVerificationPath, JSON.stringify({ size: info.size, mtimeMs: info.mtimeMs, sha256: modelSha256 }));
       if (verified && downloadState.status !== "downloading") downloadState = { status: "ready", received: info.size, total: info.size };
     })().finally(() => { modelVerificationTask = null; });
   }
@@ -161,6 +170,7 @@ export function startModelDownload() {
       await rename(temporary, modelPath);
       const info = await stat(modelPath);
       modelVerification = { mtimeMs: info.mtimeMs, verified: true };
+      await atomicWriteFile(modelVerificationPath, JSON.stringify({ size: info.size, mtimeMs: info.mtimeMs, sha256: modelSha256 }));
       const settings = await getSettings();
       const whisperCli = process.env.WORKLOG_BUNDLED_WHISPER_CLI || settings.whisperCliPath;
       await saveSettings({ ...settings, whisperCliPath: whisperCli, whisperModelPath: modelPath });

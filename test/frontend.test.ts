@@ -17,3 +17,9 @@ test("dashboard isolates widget failures instead of blanking the whole page", as
   assert.match(source, /Promise\.allSettled\(\[loadRuns\(\), loadMeetings\(\), loadMeetingStatus\(\), loadGraph\(\), loadDraft\(\), loadMorning\(\)\]\)/);
   assert.match(source, /document\.body\.classList\.add\("is-ready"\)/);
 });
+
+test("setup page leaves onboarding after an existing configuration becomes ready", async () => {
+  const source = await readFile(join(process.cwd(), "public", "setup.js"), "utf8");
+  assert.ok(source.includes('status.complete && location.pathname === "/setup.html"'));
+  assert.ok(source.includes('location.href = "/"'));
+});
