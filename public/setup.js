@@ -42,8 +42,9 @@ async function refresh() {
   $("#downloadModel").disabled = model.verified || download.status === "downloading";
   $("#modelState").textContent = model.verified ? "已下载并通过完整性校验" : model.verifying ? "模型已存在，正在后台校验完整性…" : download.status === "downloading" ? `正在下载 ${percent}%` : download.status === "failed" ? download.error : status.whisper.cliInstalled ? "转写程序已就绪，模型尚未下载" : "模型尚未下载；转写程序将在安装包中提供";
 
+  const permissionReady = !status.whisper.required || status.permissions.screenCapture;
   const checks = [
-    [status.permissions.screenCapture && status.permissions.accessibility, "系统权限"],
+    [permissionReady, status.whisper.required ? "Teams 系统音频权限" : "基础采集权限"],
     [larkVerified, "飞书用户授权"],
     [status.llmConfigured, "LLM 配置"],
     [status.wikiConfigured, "知识库位置"],
@@ -87,5 +88,11 @@ $("#downloadModel").addEventListener("click", async () => { try { await post("/a
 $("#refresh").addEventListener("click", () => refresh().catch(error => notice(error.message)));
 $("#finishSetup").addEventListener("click", () => location.href = "/");
 
-refresh().catch(error => notice(error.message));
-setInterval(() => { if (document.visibilityState === "visible") refresh().catch(() => {}); }, 2500);
+let refreshing = false;
+const safeRefresh = async () => {
+  if (refreshing) return;
+  refreshing = true;
+  try { await refresh(); } catch (error) { notice(error.message); } finally { refreshing = false; }
+};
+safeRefresh();
+setInterval(() => { if (document.visibilityState === "visible") void safeRefresh(); }, 10_000);

@@ -6,7 +6,7 @@
   <meta name="theme-color" content="#20231f" />
   <title>Worklog · 工作档案</title>
   <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
-  <link rel="stylesheet" href="/style.css" />
+  <link rel="stylesheet" href="/style.css?v=0.4.0" />
 </head>
 <body>
   <div class="app-shell">
@@ -169,7 +169,7 @@
               <label>额外敏感词（每行一个）<textarea name="redactionTerms" rows="4" placeholder="客户名&#10;内部项目代号"></textarea></label>
               <label class="switch-row warning"><span><b>暂停所有工作采集</b><small>已有会议不会被强行中断</small></span><input name="capturePaused" type="checkbox" /></label>
               <label class="switch-row"><span><b>自动清理原始数据</b><small>仅清理本地操作证据和已处理会议音频，不删除日报</small></span><input name="retentionEnabled" type="checkbox" /></label>
-              <div class="form-grid wide"><label>操作证据保留天数<input name="evidenceRetentionDays" type="number" min="1" max="3650" /></label><label>会议音频保留天数<input name="meetingAudioRetentionDays" type="number" min="0" max="3650" /><small>设为 0 表示处理完成后即可清理</small></label></div>
+              <div class="form-grid wide"><label>操作证据保留天数<input name="evidenceRetentionDays" type="number" min="1" max="3650" /></label><label>会议音频保留天数<input name="meetingAudioRetentionDays" type="number" min="0" max="3650" /><small>设为 0 表示处理完成后即可清理</small></label><label>会议存储上限（MB）<input name="meetingStorageLimitMb" type="number" min="256" max="20480" /><small>超出后优先清理最早的已处理录音</small></label></div>
             </div>
           </details>
 
@@ -213,6 +213,6 @@
       <footer><span>WORKLOG / LOCAL-FIRST WORK ARCHIVE</span><span>证据留在本地，成果归档到你选择的位置。</span></footer>
     </main>
   </div>
-  <script src="/app.js"></script>
+  <script src="/app.js?v=0.4.0"></script>
 </body>
 </html>

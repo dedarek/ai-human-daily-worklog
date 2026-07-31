@@ -7,7 +7,7 @@ import { collectAgentActivities } from "./agentLogs.js";
 import { collectAppHistory } from "./appHistory.js";
 import { inHourWindow } from "./time.js";
 import { redact } from "./redact.js";
-import { atomicWriteFile } from "./jsonStore.js";
+import { atomicWriteFile, readJson } from "./jsonStore.js";
 
 const safe = (value: string, settings: Settings) => settings.redactionEnabled ? redact(value, settings.redactionTerms) : value;
 const evidenceDir = (date: string) => join(dataDir, "evidence", date);
@@ -31,9 +31,11 @@ export async function readAudit(date: string, settings: Settings, window = { sta
   try {
     if ((await stat(input)).mtimeMs < Date.now() - 5 * 60_000) return collect(date, settings, window);
     const activities = sanitizeActivities((await readFile(input, "utf8")).trim().split("\n").filter(Boolean).map(line => JSON.parse(line) as Activity), settings);
-    const manifest = await saveEvidence(date, activities, window);
+    const manifest = await readJson(join(evidenceDir(date), "manifest.json"), { date, generatedAt: new Date((await stat(input)).mtimeMs).toISOString(), source: "cached-evidence", window: `${window.startHour}:00-${window.endHour}:00`, eventCount: activities.length, processes: [...new Set(activities.map(item => item.process))] });
     return { activities, manifest };
-  } catch { return collect(date, settings, window); }
+  } catch (error) {
+    throw new Error(`证据缓存已损坏，已停止自动覆盖：${input}`, { cause: error });
+  }
 }
 
 export async function collect(date: string, settings: Settings, window = { startHour: 8, endHour: 18 }) {

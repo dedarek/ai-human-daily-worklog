@@ -62,6 +62,7 @@ export function settingsFromInput(old: Settings, input: unknown): Settings {
     llmModel: string("llmModel"), larkCliPath: string("larkCliPath"), feishuBaseUrl: string("feishuBaseUrl"), feishuWikiNodeToken: string("feishuWikiNodeToken"),
     teamsMeetingEnabled: bool("teamsMeetingEnabled"), teamsAutoRecord: bool("teamsAutoRecord"), whisperCliPath: string("whisperCliPath"), whisperModelPath: string("whisperModelPath"),
     retentionEnabled: bool("retentionEnabled"), evidenceRetentionDays: integer("evidenceRetentionDays", old.evidenceRetentionDays, 1, 3650), meetingAudioRetentionDays: integer("meetingAudioRetentionDays", old.meetingAudioRetentionDays, 0, 3650),
+    meetingStorageLimitMb: integer("meetingStorageLimitMb", old.meetingStorageLimitMb, 256, 20_480),
   };
   if (!next.llmModel) throw new Error("LLM 模型不能为空。");
   validateSchedules(next);

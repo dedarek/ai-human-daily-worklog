@@ -23,6 +23,7 @@ export type Settings = {
   retentionEnabled: boolean;
   evidenceRetentionDays: number;
   meetingAudioRetentionDays: number;
+  meetingStorageLimitMb: number;
 };
 
 export type Secrets = { llmApiKey: string };

@@ -6,6 +6,7 @@ import { pipeline } from "node:stream/promises";
 import { Readable } from "node:stream";
 import { promisify } from "node:util";
 import { execFile } from "node:child_process";
+import { getNativeState, queueNativePermission } from "./nativeBridge.js";
 import { dataDir, getSecrets, getSettings, saveSettings } from "./store.js";
 import { findLarkCli, getLarkStatus, runLarkProcess } from "./larkCli.js";
 import { platformCapabilities, worklogPlatform } from "./platform.js";
@@ -67,8 +68,11 @@ async function larkInfo(settings: Awaited<ReturnType<typeof getSettings>>) {
 export async function onboardingStatus() {
   const settings = await getSettings(); const secrets = await getSecrets();
   const capabilities = platformCapabilities();
-  const screen = capabilities.nativePermissions ? await jsonTool(audioTool, ["--permission-status"]) : { screenCapture: true };
-  const accessibility = capabilities.nativePermissions ? await jsonTool(permissionTool, []) : { accessibility: true };
+  const native = getNativeState();
+  const helperScreen = capabilities.nativePermissions ? await jsonTool(audioTool, ["--permission-status"]) : { screenCapture: true };
+  const helperAccessibility = capabilities.nativePermissions ? await jsonTool(permissionTool, []) : { accessibility: true };
+  const screen = { screenCapture: native?.screenCapture === true || helperScreen.screenCapture === true };
+  const accessibility = { accessibility: native?.accessibility === true || helperAccessibility.accessibility === true };
   const lark = await larkInfo(settings);
   const bundledWhisper = process.env.WORKLOG_BUNDLED_WHISPER_CLI;
   const whisperCli = [settings.whisperCliPath, bundledWhisper, "/opt/homebrew/bin/whisper-cli", "/usr/local/bin/whisper-cli", join(dataDir, "bin", process.platform === "win32" ? "whisper-cli.exe" : "whisper-cli")].find(value => value && existsSync(value));
@@ -76,11 +80,12 @@ export async function onboardingStatus() {
   const meetingRequired = capabilities.teamsSystemAudio && settings.teamsMeetingEnabled;
   const meetingReady = !meetingRequired || Boolean(whisperCli && model.verified);
   const destinationReady = settings.markdownOutputEnabled || ((lark as any).verified === true && Boolean(settings.feishuWikiNodeToken));
-  const permissionsReady = accessibility.accessibility === true && (!meetingRequired || screen.screenCapture === true);
+  // 辅助功能只提升窗口标题质量，不应阻止核心采集；Teams 启用时系统音频权限才是必需项。
+  const permissionsReady = !meetingRequired || screen.screenCapture === true;
   return {
     platform: worklogPlatform(),
     capabilities,
-    permissions: { required: capabilities.nativePermissions, screenCapture: screen.screenCapture === true, accessibility: accessibility.accessibility === true },
+    permissions: { required: capabilities.nativePermissions, source: native ? "app+helper" : "helper", screenCapture: screen.screenCapture, accessibility: accessibility.accessibility },
     lark,
     larkLogin,
     llmConfigured: Boolean(secrets.llmApiKey && settings.llmBaseUrl && settings.llmModel),
@@ -92,6 +97,16 @@ export async function onboardingStatus() {
 
 export async function requestPermission(kind: "screen" | "accessibility") {
   if (worklogPlatform() !== "macos") return { granted: true, notRequired: true };
+  const native = getNativeState();
+  if (native) {
+    if (kind === "screen" && native.screenCapture) return { screenCapture: true };
+    if (kind === "accessibility" && native.accessibility) return { accessibility: true };
+    const helper = kind === "screen" ? await jsonTool(audioTool, ["--permission-status"]) : await jsonTool(permissionTool, []);
+    if (kind === "screen" && helper.screenCapture === true) return { screenCapture: true };
+    if (kind === "accessibility" && helper.accessibility === true) return { accessibility: true };
+    queueNativePermission(kind);
+    return kind === "screen" ? { screenCapture: native.screenCapture } : { accessibility: native.accessibility };
+  }
   return kind === "screen"
     ? jsonTool(audioTool, ["--request-permission"])
     : jsonTool(permissionTool, ["--request-accessibility"]);

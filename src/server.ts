@@ -7,6 +7,7 @@ import { getSettings, logRun, setupStore } from "./store.js";
 import { startTeamsMonitor, stopTeamsMonitor } from "./teamsMeeting.js";
 import { jsonErrorHandler, localSecurity } from "./security.js";
 import { cleanupRetention } from "./retention.js";
+import { scrubStoredSensitiveData } from "./privacy.js";
 
 process.umask(0o077);
 
@@ -18,6 +19,11 @@ app.use(express.static(join(process.env.WORKLOG_ASSET_DIR || process.cwd(), "pub
 registerRoutes(app);
 app.use(jsonErrorHandler);
 
+await setupStore();
+const startupSettings = await getSettings();
+if (startupSettings.redactionEnabled) await scrubStoredSensitiveData(startupSettings).catch(error => logRun({ status: "privacy_scrub_failed", error: String(error) }));
+await cleanupRetention().catch(error => logRun({ status: "retention_failed", error: String(error) }));
+
 // 先占用端口再启动 cron/采样器，避免两个桌面实例在端口竞争期间同时运行后台任务。
 const port = Number(process.env.WORKLOG_PORT || 4318);
 const server = await new Promise<ReturnType<typeof app.listen>>((resolve, reject) => {
@@ -27,8 +33,6 @@ const server = await new Promise<ReturnType<typeof app.listen>>((resolve, reject
 });
 console.log(`Worklog is running at http://127.0.0.1:${port}`);
 
-await setupStore();
-await cleanupRetention().catch(error => logRun({ status: "retention_failed", error: String(error) }));
 if (process.env.WORKLOG_DISABLE_BACKGROUND !== "1") {
   await schedule();
   await startTeamsMonitor();
@@ -46,6 +50,9 @@ async function shutdown() {
   if (shuttingDown) return; shuttingDown = true;
   stopSchedule();
   await stopTeamsMonitor().catch(error => logRun({ status: "shutdown_meeting_failed", error: String(error) }));
-  await new Promise<void>(resolve => server.close(() => resolve()));
+  await Promise.race([
+    new Promise<void>(resolve => server.close(() => resolve())),
+    new Promise<void>(resolve => setTimeout(resolve, 5000)),
+  ]);
 }
 for (const signal of ["SIGINT", "SIGTERM"] as const) process.once(signal, () => void shutdown().finally(() => process.exit()));

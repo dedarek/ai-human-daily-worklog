@@ -13,6 +13,7 @@ import { redact } from "./redact.js";
 import { meetingTitle } from "./titles.js";
 import type { MeetingRecord } from "./types.js";
 import { worklogPlatform } from "./platform.js";
+import { getNativeState } from "./nativeBridge.js";
 
 const exec = promisify(execFile);
 const meetingsFile = join(dataDir, "meetings.json");
@@ -24,6 +25,7 @@ const processMeeting = createMutex();
 type AudioStatus = {
   teamsProcessAudioRunning: boolean;
 };
+type CaptureResult = { code: number | null; signal: NodeJS.Signals | null; error?: Error };
 
 type RuntimeStatus = {
   supported: boolean;
@@ -40,13 +42,15 @@ type RuntimeStatus = {
 
 let current: MeetingRecord | null = null;
 let audioCapture: ChildProcess | null = null;
-let captureClosed: Promise<number> | null = null;
+let captureClosed: Promise<CaptureResult> | null = null;
 let rawAudioPath = "";
+let captureStopping = false;
 let polling = false;
 let monitorTimer: NodeJS.Timeout | undefined;
 let startSignals = 0;
 let missingMeetingWindows = 0;
 let meetingWindowSeen = false;
+let automaticCooldownUntil = 0;
 let lastStatus: RuntimeStatus = {
   supported: worklogPlatform() === "macos",
   platform: worklogPlatform(),
@@ -58,6 +62,10 @@ let lastStatus: RuntimeStatus = {
   windowTitles: [],
   current: null,
 };
+
+export function meetingAutoStartThreshold(meetingWindowDetected: boolean) {
+  return meetingWindowDetected ? 3 : 8;
+}
 
 function localDate(iso: string, timezone: string) {
   return new Intl.DateTimeFormat("en-CA", { timeZone: timezone, year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date(iso));
@@ -83,6 +91,16 @@ async function audioStatus(): Promise<AudioStatus> {
   if (!existsSync(nativeDetector)) throw new Error("Teams 音频检测器尚未生成，请重新运行项目安装脚本。");
   const { stdout } = await exec(nativeDetector, [], { timeout: 5000 });
   return JSON.parse(stdout);
+}
+
+async function screenCaptureGranted() {
+  const native = getNativeState();
+  if (native?.screenCapture) return true;
+  if (!existsSync(systemAudioCapture)) return false;
+  try {
+    const { stdout } = await exec(systemAudioCapture, ["--permission-status"], { timeout: 3000 });
+    return JSON.parse(stdout).screenCapture === true;
+  } catch { return false; }
 }
 
 async function teamsWindowTitles() {
@@ -123,10 +141,13 @@ async function startCapture(audioPath: string) {
   capture.stdout!.pipe(output);
   let captureError = "";
   capture.stderr!.on("data", chunk => captureError = (captureError + chunk).slice(-8000));
-  captureClosed = new Promise((resolve, reject) => {
-    capture.once("error", reject);
-    capture.once("close", code => {
-      void finished(output).then(() => code === null || code === 0 || code === 15 ? resolve(code ?? 0) : reject(new Error(captureError.trim() || `系统音频采集器退出码 ${code}`))).catch(reject);
+  captureStopping = false;
+  captureClosed = new Promise(resolve => {
+    capture.once("error", error => resolve({ code: null, signal: null, error }));
+    capture.once("close", (code, signal) => {
+      void finished(output)
+        .then(() => resolve({ code, signal, ...(!captureStopping && code !== 0 ? { error: new Error(captureError.trim() || `系统音频采集器退出码 ${code}`) } : {}) }))
+        .catch(error => resolve({ code, signal, error: error instanceof Error ? error : new Error(String(error)) }));
     });
   });
   try {
@@ -141,10 +162,33 @@ async function startCapture(audioPath: string) {
   } catch (error) {
     capture.kill("SIGKILL");
     captureClosed = null;
+    output.destroy();
+    await rm(rawAudioPath, { force: true });
+    rawAudioPath = "";
     throw error;
   }
   audioCapture = capture;
   if (capture.pid) await atomicWriteFile(capturePidFile, String(capture.pid));
+  void captureClosed.then(result => {
+    if (audioCapture !== capture || captureStopping) return;
+    void handleUnexpectedCaptureClose(result.error ?? new Error("系统音频采集器意外退出。"));
+  });
+}
+
+async function handleUnexpectedCaptureClose(error: Error) {
+  const record = current;
+  if (!record) return;
+  const orphan = rawAudioPath;
+  audioCapture = null; captureClosed = null; rawAudioPath = ""; current = null;
+  automaticCooldownUntil = Date.now() + 10 * 60_000;
+  record.endedAt = new Date().toISOString();
+  record.durationSeconds = Math.max(0, Math.round((Date.parse(record.endedAt) - Date.parse(record.startedAt)) / 1000));
+  record.status = "failed";
+  record.error = safeMeetingError(error);
+  await rm(orphan, { force: true }).catch(() => {});
+  await unlink(capturePidFile).catch(() => {});
+  await saveMeeting(record);
+  await logRun({ status: "failed", kind: "meeting", meetingId: record.id, error: record.error, automaticCooldownMinutes: 10 });
 }
 
 export function wavHeader(dataBytes: number) {
@@ -279,6 +323,7 @@ export async function startTeamsMeeting(origin: "automatic" | "manual" = "manual
   if (current) throw new Error("已有一场 Teams 会议正在记录。");
   const settings = await getSettings(); const startedAt = new Date().toISOString();
   if (settings.capturePaused) throw new Error("采集已暂停，请先在 Worklog 页面恢复采集。");
+  if (!await screenCaptureGranted()) throw new Error("尚未授予屏幕与系统音频录制权限；Worklog 不会自动弹出权限窗口，请在首次设置中手动授权。");
   const id = `${localDate(startedAt, settings.timezone)}-${startedAt.slice(11, 19).replace(/:/g, "")}-${randomUUID().slice(0, 6)}`;
   const dir = join(dataDir, "meetings", id); await mkdir(dir, { recursive: true });
   const title = meetingTitle(localDate(startedAt, settings.timezone), localTime(startedAt, settings.timezone), requestedTitle);
@@ -288,21 +333,48 @@ export async function startTeamsMeeting(origin: "automatic" | "manual" = "manual
   };
   current = record; meetingWindowSeen = false; missingMeetingWindows = 0;
   try { await startCapture(record.audioPath!); await saveMeeting(record); await logRun({ status: "meeting_recording", meetingId: id, title, origin }); }
-  catch (error) { current = null; record.status = "failed"; record.error = String(error); await saveMeeting(record); throw error; }
+  catch (error) {
+    const capture = audioCapture; const closed = captureClosed;
+    captureStopping = true;
+    capture?.kill("SIGKILL");
+    await closed?.catch(() => undefined);
+    current = null; audioCapture = null; captureClosed = null;
+    await rm(rawAudioPath, { force: true }); rawAudioPath = "";
+    await unlink(capturePidFile).catch(() => {});
+    captureStopping = false;
+    if (origin === "automatic") automaticCooldownUntil = Date.now() + 10 * 60_000;
+    record.status = "failed"; record.error = safeMeetingError(error); await saveMeeting(record);
+    await rm(dir, { recursive: true, force: true });
+    throw error;
+  }
   return record;
 }
 
-export async function stopTeamsMeeting() {
+export async function stopTeamsMeeting(options: { transcribe?: boolean } = {}) {
   if (!current || !audioCapture || !captureClosed) throw new Error("当前没有正在记录的 Teams 会议。");
-  const record = current; record.endedAt = new Date().toISOString();
+  const record = current; const capture = audioCapture; const closed = captureClosed; const rawPath = rawAudioPath;
+  record.endedAt = new Date().toISOString();
   record.durationSeconds = Math.max(0, Math.round((Date.parse(record.endedAt) - Date.parse(record.startedAt)) / 1000));
   record.status = "transcribing"; await saveMeeting(record);
-  audioCapture.kill("SIGTERM");
-  const forceKill = setTimeout(() => audioCapture?.kill("SIGKILL"), 8000);
-  try { await captureClosed; await finalizeWav(rawAudioPath, record.audioPath!); }
-  finally { audioCapture = null; captureClosed = null; rawAudioPath = ""; current = null; await unlink(capturePidFile).catch(() => {}); }
-  clearTimeout(forceKill);
-  void transcribeAndPublish(record);
+  captureStopping = true;
+  capture.kill("SIGTERM");
+  const forceKill = setTimeout(() => { if (capture.exitCode === null) capture.kill("SIGKILL"); }, 8000);
+  try {
+    const result = await closed;
+    if (result.error) throw result.error;
+    if (!existsSync(rawPath)) throw new Error("会议录音临时文件不存在，无法完成保存。");
+    await finalizeWav(rawPath, record.audioPath!);
+  } catch (error) {
+    record.status = "failed"; record.error = safeMeetingError(error); await saveMeeting(record); throw error;
+  } finally {
+    clearTimeout(forceKill);
+    if (audioCapture === capture) { audioCapture = null; captureClosed = null; rawAudioPath = ""; current = null; }
+    captureStopping = false;
+    await unlink(capturePidFile).catch(() => {});
+  }
+  if (record.origin === "automatic") automaticCooldownUntil = Date.now() + 2 * 60_000;
+  if (options.transcribe !== false) void transcribeAndPublish(record);
+  else await logRun({ status: "meeting_transcription_deferred", meetingId: record.id, reason: "service_shutdown" });
   return record;
 }
 
@@ -310,10 +382,21 @@ async function poll() {
   if (polling) return; polling = true;
   try {
     const settings = await getSettings();
-    const [audio, titles, running] = await Promise.all([audioStatus(), teamsWindowTitles(), teamsRunning()]);
+    if (settings.capturePaused || !settings.teamsMeetingEnabled || !settings.teamsAutoRecord) {
+      startSignals = 0;
+      lastStatus = { ...lastStatus, monitoring: settings.teamsMeetingEnabled, current };
+      return;
+    }
+    const running = await teamsRunning();
+    if (!running) {
+      lastStatus = { ...lastStatus, monitoring: true, teamsInstalled: false, meetingWindowDetected: false, callActivityDetected: false, windowTitles: [], current };
+      if (current) await stopTeamsMeeting();
+      return;
+    }
+    const [audio, titles] = await Promise.all([audioStatus(), teamsWindowTitles()]);
     const meetingWindowDetected = isMeetingWindow(titles);
     const signals = { teamsCallActive: audio.teamsProcessAudioRunning, meetingWindow: meetingWindowDetected };
-    const meetingSignal = running && hasMeetingSignal(signals);
+    const meetingSignal = hasMeetingSignal(signals);
     lastStatus = {
       supported: true,
       platform: "macos",
@@ -325,13 +408,21 @@ async function poll() {
       windowTitles: titles,
       current,
     };
-    if (settings.capturePaused || !settings.teamsMeetingEnabled || !settings.teamsAutoRecord) { startSignals = 0; return; }
     if (!current) {
-      startSignals = meetingSignal ? startSignals + 1 : 0;
-      if (startSignals >= 2) {
+      if (Date.now() < automaticCooldownUntil) { startSignals = 0; return; }
+      startSignals = audio.teamsProcessAudioRunning ? startSignals + 1 : 0;
+      // 必须同时存在 Teams 输出音频；明确会议窗口持续 15 秒，只有音频时持续 40 秒。
+      // 这样仍覆盖没有固定窗口标题的会议，同时排除铃声、提示音和普通 Teams 页面。
+      const requiredSignals = meetingAutoStartThreshold(meetingWindowDetected);
+      if (audio.teamsProcessAudioRunning && startSignals >= requiredSignals) {
         startSignals = 0;
+        if (!await screenCaptureGranted()) {
+          automaticCooldownUntil = Date.now() + 10 * 60_000;
+          lastStatus = { ...lastStatus, lastError: "Teams 通话已检测到，但系统音频权限尚未开启；自动记录已冷却 10 分钟。" };
+          return;
+        }
         await startTeamsMeeting("automatic", meetingSubject(titles));
-        meetingWindowSeen = true;
+        meetingWindowSeen = meetingWindowDetected;
       }
       return;
     }
@@ -394,7 +485,7 @@ export async function stopTeamsMonitor() {
   if (monitorTimer) clearInterval(monitorTimer);
   monitorTimer = undefined;
   lastStatus.monitoring = false;
-  if (current && audioCapture && captureClosed) await stopTeamsMeeting();
+  if (current && audioCapture && captureClosed) await stopTeamsMeeting({ transcribe: false });
 }
 
 export function getTeamsMeetingStatus() {

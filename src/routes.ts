@@ -3,7 +3,6 @@ import { existsSync } from "node:fs";
 import { open, stat } from "node:fs/promises";
 import { join } from "node:path";
 import { resolveWikiTarget } from "./feishu.js";
-import { getLarkStatus } from "./larkCli.js";
 import { createDailyDraft, getDailyDraft, publishDailyDraft, run, runSummary, updateDailyDraft } from "./reportRunner.js";
 import { schedule } from "./scheduler.js";
 import { dataDir, getSecrets, getSettings, logRun, saveSecrets, saveSettings } from "./store.js";
@@ -18,6 +17,9 @@ import { buildWorkGraph, getWorkPreferences, loadReportTrace, loadWorkGraph, sea
 import { answerArchiveQuestion } from "./llm.js";
 import { createMorningBrief, getMorningBrief } from "./morningBrief.js";
 import { settingsFromInput, validDate, validId } from "./validation.js";
+import { setNativeState, takeNativePermissionRequest } from "./nativeBridge.js";
+import { scrubStoredSensitiveData } from "./privacy.js";
+import { cleanupRetention } from "./retention.js";
 
 const legacyKeys = ["feishuAppId", "feishuAppSecret", "feishuFolderToken", "feishuWikiSpaceId", "titlePrefix", "teamsAudioDevice", "teamsMicrophoneDevice"];
 const publicError = (error: unknown) => String(error instanceof Error ? error.message : error).replaceAll(dataDir, "[Worklog 数据目录]").slice(0, 600);
@@ -38,6 +40,14 @@ async function reportRuns() {
 }
 
 export function registerRoutes(app: Express) {
+  app.post("/api/native-state", (req, res) => {
+    const expected = process.env.WORKLOG_DESKTOP_TOKEN;
+    if (!expected || req.body?.token !== expected) return res.status(403).json({ error: "原生状态来源无效。" });
+    try {
+      setNativeState(req.body);
+      res.json({ ok: true, requestPermission: takeNativePermissionRequest() });
+    } catch (error) { res.status(400).json({ error: publicError(error) }); }
+  });
   app.post("/api/shutdown", async (req, res) => {
     const expected = process.env.WORKLOG_DESKTOP_TOKEN;
     if (!expected || req.body?.token !== expected) return res.status(403).json({ error: "该服务不由当前桌面应用管理。" });
@@ -63,24 +73,19 @@ export function registerRoutes(app: Express) {
       for (const key of legacyKeys) delete (settings as unknown as Record<string, unknown>)[key];
       await saveSettings(settings);
       await saveSecrets({ llmApiKey: typeof body.llmApiKey === "string" ? body.llmApiKey : undefined });
-      await schedule();
+      await schedule({ catchUp: false });
+      if (settings.redactionEnabled) await scrubStoredSensitiveData(settings, true);
+      await cleanupRetention();
       res.json({ ok: true });
     } catch (error) { res.status(400).json({ error: String(error instanceof Error ? error.message : error) }); }
   });
 
   app.get("/api/setup/status", async (_req, res) => {
-    const settings = await getSettings(); const secrets = await getSecrets();
     try {
-      const lark = await getLarkStatus(settings);
-      res.json({
-        lark,
-        llmConfigured: Boolean(secrets.llmApiKey && settings.llmBaseUrl && settings.llmModel),
-        wikiConfigured: Boolean(settings.feishuWikiNodeToken),
-        wikiNodeToken: settings.feishuWikiNodeToken || "",
-        ready: Boolean(secrets.llmApiKey) && (settings.markdownOutputEnabled || (lark.verified && lark.identity === "user" && Boolean(settings.feishuWikiNodeToken))),
-      });
+      const status = await onboardingStatus();
+      res.json({ ...status, ready: status.complete });
     } catch (error) {
-      res.json({ lark: { installed: false, error: publicError(error) }, llmConfigured: Boolean(secrets.llmApiKey), wikiConfigured: Boolean(settings.feishuWikiNodeToken), ready: Boolean(secrets.llmApiKey && settings.markdownOutputEnabled) });
+      res.status(500).json({ error: publicError(error), ready: false });
     }
   });
 

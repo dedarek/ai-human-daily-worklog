@@ -1,5 +1,6 @@
 import AppKit
 import ApplicationServices
+import CoreGraphics
 import Darwin
 import ServiceManagement
 import WebKit
@@ -23,7 +24,13 @@ final class WorklogApp: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNav
     private var loginItemMenuItem: NSMenuItem!
     private var service: Process?
     private var window: NSWindow?
+    private var webView: WKWebView?
+    private var pendingWebURL: URL?
+    private var webRetryCount = 0
+    private var webRetryWorkItem: DispatchWorkItem?
     private var pollTimer: Timer?
+    private var nativeStateTimer: Timer?
+    private var lastPermissionPromptAt = Date.distantPast
     private var capturePaused = false
     private var todayURL = ""
     private var serverReady = false
@@ -42,11 +49,14 @@ final class WorklogApp: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNav
         startServiceIfNeeded()
         configureLoginItem()
         pollTimer = Timer.scheduledTimer(withTimeInterval: 5, repeats: true) { [weak self] _ in self?.refreshStatus() }
+        nativeStateTimer = Timer.scheduledTimer(withTimeInterval: 10, repeats: true) { [weak self] _ in self?.publishNativeState() }
+        publishNativeState()
         refreshStatus(openSetupWhenReady: true)
     }
 
     func applicationWillTerminate(_ notification: Notification) {
         pollTimer?.invalidate()
+        nativeStateTimer?.invalidate()
         if let service, service.isRunning { service.terminate() }
         if instanceLockFD >= 0 { flock(instanceLockFD, LOCK_UN); close(instanceLockFD) }
     }
@@ -203,6 +213,43 @@ final class WorklogApp: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNav
         }
     }
 
+    private func publishNativeState() {
+        guard !serviceToken.isEmpty else { return }
+        let application = NSWorkspace.shared.frontmostApplication
+        var title = ""
+        let accessibility = AXIsProcessTrusted()
+        if accessibility, let processIdentifier = application?.processIdentifier {
+            let app = AXUIElementCreateApplication(processIdentifier)
+            var window: CFTypeRef?
+            if AXUIElementCopyAttributeValue(app, kAXFocusedWindowAttribute as CFString, &window) == .success,
+               let window {
+                var value: CFTypeRef?
+                if AXUIElementCopyAttributeValue(window as! AXUIElement, kAXTitleAttribute as CFString, &value) == .success {
+                    title = value as? String ?? ""
+                }
+            }
+        }
+        let payload: [String: Any] = [
+            "token": serviceToken,
+            "observedAt": ISO8601DateFormatter().string(from: Date()),
+            "accessibility": accessibility,
+            "screenCapture": CGPreflightScreenCaptureAccess(),
+            "app": application?.localizedName ?? "",
+            "windowTitle": title
+        ]
+        request(path: "/api/native-state", method: "POST", body: payload) { [weak self] result in
+            guard let self, case .success(let body) = result, let kind = body["requestPermission"] as? String else { return }
+            guard Date().timeIntervalSince(self.lastPermissionPromptAt) >= 15 else { return }
+            self.lastPermissionPromptAt = Date()
+            if kind == "accessibility" {
+                let options = [kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String: true] as CFDictionary
+                _ = AXIsProcessTrustedWithOptions(options)
+            } else if kind == "screen" {
+                _ = CGRequestScreenCaptureAccess()
+            }
+        }
+    }
+
     private func updateStatus(_ title: String, healthy: Bool) {
         DispatchQueue.main.async {
             self.statusMenuItem.title = title
@@ -229,7 +276,18 @@ final class WorklogApp: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNav
     }
 
     private func showWindow(path: String, title: String) {
-        if let window { window.makeKeyAndOrderFront(nil); NSApp.activate(ignoringOtherApps: true); return }
+        let targetURL = serverBase.appendingPathComponent(path)
+        if let window {
+            if webView?.url?.path != targetURL.path {
+                pendingWebURL = targetURL
+                webRetryCount = 0
+                webView?.load(URLRequest(url: targetURL, cachePolicy: .reloadIgnoringLocalCacheData))
+            }
+            window.title = title
+            window.makeKeyAndOrderFront(nil)
+            NSApp.activate(ignoringOtherApps: true)
+            return
+        }
         let configuration = WKWebViewConfiguration()
         configuration.websiteDataStore = .default()
         let webView = WKWebView(frame: NSRect(x: 0, y: 0, width: 940, height: 760), configuration: configuration)
@@ -237,11 +295,50 @@ final class WorklogApp: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNav
         let window = NSWindow(contentRect: webView.frame, styleMask: [.titled, .closable, .miniaturizable, .resizable], backing: .buffered, defer: false)
         window.title = title; window.contentView = webView; window.center(); window.delegate = self
         self.window = window
+        self.webView = webView
+        pendingWebURL = targetURL
+        webRetryCount = 0
         window.makeKeyAndOrderFront(nil); NSApp.activate(ignoringOtherApps: true)
-        webView.load(URLRequest(url: serverBase.appendingPathComponent(path)))
+        webView.load(URLRequest(url: targetURL, cachePolicy: .reloadIgnoringLocalCacheData))
     }
 
-    func windowWillClose(_ notification: Notification) { window = nil }
+    func windowWillClose(_ notification: Notification) {
+        webRetryWorkItem?.cancel()
+        webRetryWorkItem = nil
+        pendingWebURL = nil
+        webView = nil
+        window = nil
+    }
+
+    private func retryWebViewLoad(_ webView: WKWebView) {
+        guard let targetURL = pendingWebURL, webRetryCount < 12 else { return }
+        webRetryWorkItem?.cancel()
+        webRetryCount += 1
+        let delay = min(0.5 + Double(webRetryCount) * 0.35, 3.0)
+        let item = DispatchWorkItem { [weak self, weak webView] in
+            guard let self, let webView, self.webView === webView else { return }
+            webView.load(URLRequest(url: targetURL, cachePolicy: .reloadIgnoringLocalCacheData))
+        }
+        webRetryWorkItem = item
+        DispatchQueue.main.asyncAfter(deadline: .now() + delay, execute: item)
+    }
+
+    func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
+        webRetryWorkItem?.cancel()
+        webRetryWorkItem = nil
+        webRetryCount = 0
+        pendingWebURL = webView.url
+        if webView.url?.path == "/setup.html" { window?.title = "开始使用 Worklog" }
+        else { window?.title = "Worklog" }
+    }
+
+    func webView(_ webView: WKWebView, didFailProvisionalNavigation navigation: WKNavigation!, withError error: Error) {
+        retryWebViewLoad(webView)
+    }
+
+    func webView(_ webView: WKWebView, didFail navigation: WKNavigation!, withError error: Error) {
+        retryWebViewLoad(webView)
+    }
 
     func webView(_ webView: WKWebView, createWebViewWith configuration: WKWebViewConfiguration, for navigationAction: WKNavigationAction, windowFeatures: WKWindowFeatures) -> WKWebView? {
         if let url = navigationAction.request.url, url.scheme == "https" || url.scheme == "http" { NSWorkspace.shared.open(url) }

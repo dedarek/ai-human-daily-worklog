@@ -3,7 +3,7 @@ import { existsSync } from "node:fs";
 import { readdir } from "node:fs/promises";
 import { join } from "node:path";
 import { getSettings, logRun, dataDir } from "./store.js";
-import { readJson } from "./jsonStore.js";
+import { readJson, updateJson } from "./jsonStore.js";
 import { run, runSummary } from "./reportRunner.js";
 import { createMorningBrief } from "./morningBrief.js";
 import { isoDate, dateAdd, previousMonth, workdays } from "./time.js";
@@ -11,6 +11,12 @@ import { createMutex } from "./jsonStore.js";
 
 let tasks: ScheduledTask[] = [];
 const catchUpRun = createMutex();
+const catchUpStateFile = join(dataDir, "catchup-state.json");
+const retryCooldownMs = 6 * 60 * 60_000;
+
+export function catchUpEligible(attemptedAt: string | undefined, now = Date.now()) {
+  return !attemptedAt || !Number.isFinite(Date.parse(attemptedAt)) || now - Date.parse(attemptedAt) >= retryCooldownMs;
+}
 
 export function stopSchedule() {
   for (const task of tasks) task.stop();
@@ -46,38 +52,48 @@ async function catchUp(now: Date, timezone: string) {
   const weekday = localWeekday(now, timezone);
   const hour = Number(new Intl.DateTimeFormat("en-GB", { timeZone: timezone, hour: "2-digit", hourCycle: "h23" }).format(now));
   const minute = Number(new Intl.DateTimeFormat("en-GB", { timeZone: timezone, minute: "2-digit" }).format(now));
-  const tasksToRun: Array<() => Promise<unknown>> = [];
+  const attempts = await readJson<Record<string, { attemptedAt: string; failures: number }>>(catchUpStateFile, {});
+  const tasksToRun: Array<{ key: string; run: () => Promise<unknown> }> = [];
+  const eligible = (key: string) => catchUpEligible(attempts[key]?.attemptedAt, now.getTime());
+  const enqueue = (key: string, runTask: () => Promise<unknown>) => { if (eligible(key)) tasksToRun.push({ key, run: runTask }); };
 
   const afterMorning = hour > 8 || (hour === 8 && minute >= 30);
-  if (weekday >= 1 && weekday <= 5 && afterMorning && hasReports(dateAdd(today, -7), dateAdd(today, -1)) && !existsSync(join(dataDir, "briefs", `${today}.md`))) tasksToRun.push(() => createMorningBrief(today, false));
+  if (weekday >= 1 && weekday <= 5 && afterMorning && hasReports(dateAdd(today, -7), dateAdd(today, -1)) && !existsSync(join(dataDir, "briefs", `${today}.md`))) enqueue(`morning:${today}`, () => createMorningBrief(today, false));
 
   const dailyEnd = hour > 18 || (hour === 18 && minute >= 0);
   if (dailyEnd) {
     for (const date of workdays(dateAdd(today, -7), dateAdd(today, -1))) {
-      if (!published[date] && await hasEvidence(date)) tasksToRun.push(() => run(date, false));
+      if (!published[date] && await hasEvidence(date)) enqueue(`daily:${date}`, () => run(date, false));
     }
-    if (weekday >= 1 && weekday <= 5 && !published[today] && await hasEvidence(today)) tasksToRun.push(() => run(today, false));
+    if (weekday >= 1 && weekday <= 5 && !published[today] && await hasEvidence(today)) enqueue(`daily:${today}`, () => run(today, false));
   }
 
   const afterWeekly = hour > 8 || (hour === 8 && minute >= 0);
   if (weekday >= 1 && weekday <= 5 && afterWeekly) {
     const range = previousWorkWeek(today, timezone);
-    if (!published[`weekly:${range.start}`] && hasReports(range.start, range.end)) tasksToRun.push(() => runSummary("weekly", range.start, range.end, false));
+    if (!published[`weekly:${range.start}`] && hasReports(range.start, range.end)) enqueue(`weekly:${range.start}`, () => runSummary("weekly", range.start, range.end, false));
   }
 
   const day = Number(new Intl.DateTimeFormat("en-GB", { timeZone: timezone, day: "2-digit" }).format(now));
   const afterMonthly = hour > 8 || (hour === 8 && minute >= 10);
   if (day >= 1 && day <= 7 && afterMonthly) {
     const range = previousMonth(today);
-    if (!published[`monthly:${range.start.slice(0, 7)}`] && hasReports(range.start, range.end)) tasksToRun.push(() => runSummary("monthly", range.start, range.end, false));
+    if (!published[`monthly:${range.start.slice(0, 7)}`] && hasReports(range.start, range.end)) enqueue(`monthly:${range.start.slice(0, 7)}`, () => runSummary("monthly", range.start, range.end, false));
   }
 
   for (const task of tasksToRun) {
-    try { await task(); } catch (error) { await logRun({ status: "catchup_failed", error: String(error) }); }
+    await updateJson(catchUpStateFile, {}, (state: Record<string, { attemptedAt: string; failures: number }>) => ({ ...state, [task.key]: { attemptedAt: new Date().toISOString(), failures: state[task.key]?.failures ?? 0 } }));
+    try {
+      await task.run();
+      await updateJson(catchUpStateFile, {}, (state: Record<string, { attemptedAt: string; failures: number }>) => { const next = { ...state }; delete next[task.key]; return next; });
+    } catch (error) {
+      await updateJson(catchUpStateFile, {}, (state: Record<string, { attemptedAt: string; failures: number }>) => ({ ...state, [task.key]: { attemptedAt: new Date().toISOString(), failures: (state[task.key]?.failures ?? 0) + 1 } }));
+      await logRun({ status: "catchup_failed", catchupKey: task.key, retryAfterHours: 6, error: String(error) });
+    }
   }
 }
 
-export async function schedule() {
+export async function schedule(options: { catchUp?: boolean } = {}) {
   const s = await getSettings();
   for (const [name, expr] of [["日报", s.schedule], ["周报", s.weeklySchedule], ["月报", s.monthlySchedule], ["晨间续接", s.morningSchedule]] as const) {
     if (!cron.validate(expr)) throw new Error(`${name}定时规则无效：${expr}，请使用 5 段 cron，例如 10 0 * * *。`);
@@ -105,5 +121,5 @@ export async function schedule() {
     createMorningBrief(date, false).catch(error => logRun({ status: "failed", kind: "morning", date, error: String(error) }));
   }, { timezone: s.timezone }));
 
-  void catchUpRun(() => catchUp(new Date(), s.timezone));
+  if (options.catchUp !== false) void catchUpRun(() => catchUp(new Date(), s.timezone)).catch(error => logRun({ status: "catchup_failed", error: String(error) }));
 }
