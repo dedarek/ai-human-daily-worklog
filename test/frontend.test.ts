@@ -23,3 +23,10 @@ test("setup page leaves onboarding after an existing configuration becomes ready
   assert.ok(source.includes('status.complete && location.pathname === "/setup.html"'));
   assert.ok(source.includes('location.href = "/"'));
 });
+
+test("work graph cards contain long commands instead of letting them escape", async () => {
+  const css = await readFile(join(process.cwd(), "public", "style.css"), "utf8");
+  assert.match(css, /\.chain\{[^}]*min-width:0;overflow:hidden/);
+  assert.match(css, /\.chain-title b\{[^}]*overflow-wrap:anywhere/);
+  assert.match(css, /\.chain p\{[^}]*overflow-wrap:anywhere/);
+});
