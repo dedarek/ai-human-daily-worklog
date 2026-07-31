@@ -6,6 +6,7 @@ import { join } from "node:path";
 import { dataDir } from "./store.js";
 import { redact } from "./redact.js";
 import type { Operation, Settings } from "./types.js";
+import { getNativeState } from "./nativeBridge.js";
 
 const exec = promisify(execFile);
 const dateIn = (timezone: string) => new Intl.DateTimeFormat("en-CA", { timeZone: timezone, year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
@@ -45,6 +46,8 @@ $name = try { (Get-Process -Id $pidValue -ErrorAction Stop).ProcessName } catch 
 `;
 
 async function macosFrontmostApp() {
+  const native = getNativeState();
+  if (native) return { app: native.app, windowTitle: native.windowTitle };
   try {
     const helper = join(dataDir, "bin", "permission-status");
     const command = existsSync(helper) ? helper : "/usr/bin/osascript";

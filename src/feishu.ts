@@ -1,9 +1,11 @@
 import type { Secrets, Settings } from "./types.js";
 import { dataDir } from "./store.js";
 import { runLarkCli } from "./larkCli.js";
-import { updateJson } from "./jsonStore.js";
+import { createMutex, readJson, updateJson } from "./jsonStore.js";
 import { dailyTitle } from "./titles.js";
 import { join } from "node:path";
+
+const wikiTreeLock = createMutex();
 
 export function calendarKey(date: string) {
   const d = new Date(`${date}T12:00:00Z`); const day = d.getUTCDay() || 7; d.setUTCDate(d.getUTCDate() + 4 - day);
@@ -22,24 +24,26 @@ async function wikiMonthParent(date: string, settings: Settings) {
   if (!settings.feishuWikiNodeToken) throw new Error("请先在初始化页面绑定飞书知识库父页面。");
   const file = join(dataDir, "wiki-index.json");
   const key = calendarKey(date); const monthKey = `month:${key.month}`;
-  const index = await updateJson<Record<string, string>>(file, {}, async current => {
-    if (current[monthKey]) return current;
+  return wikiTreeLock(async () => {
+    const current = await readJson<Record<string, string>>(file, {});
+    if (current[monthKey]) return current[monthKey];
     const created = await createWikiDoc(settings.feishuWikiNodeToken!, `${date.slice(0, 4)} 年 ${Number(date.slice(5, 7))} 月`, settings);
-    return { ...current, [monthKey]: created.node_token };
+    const index = await updateJson<Record<string, string>>(file, {}, latest => latest[monthKey] ? latest : { ...latest, [monthKey]: created.node_token });
+    return index[monthKey];
   });
-  return index[monthKey];
 }
 
 async function wikiParent(date: string, settings: Settings) {
   const file = join(dataDir, "wiki-index.json");
   const key = calendarKey(date); const weekKey = `week:${key.week}`;
   const monthParent = await wikiMonthParent(date, settings);
-  const index = await updateJson<Record<string, string>>(file, {}, async current => {
-    if (current[weekKey]) return current;
+  return wikiTreeLock(async () => {
+    const current = await readJson<Record<string, string>>(file, {});
+    if (current[weekKey]) return current[weekKey];
     const created = await createWikiDoc(monthParent, key.weekLabel, settings);
-    return { ...current, [weekKey]: created.node_token };
+    const index = await updateJson<Record<string, string>>(file, {}, latest => latest[weekKey] ? latest : { ...latest, [weekKey]: created.node_token });
+    return index[weekKey];
   });
-  return index[weekKey];
 }
 
 async function overwriteDocument(documentId: string, report: string, settings: Settings) {

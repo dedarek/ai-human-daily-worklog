@@ -20,11 +20,15 @@ const publishedFile = join(dataDir, "published.json");
 const draftsDir = join(dataDir, "drafts");
 
 // 同一报告串行，不同日期/周期可独立运行；published.json 自身另有文件锁。
-const reportLocks = new Map<string, ReturnType<typeof createMutex>>();
+const reportLocks = new Map<string, { run: ReturnType<typeof createMutex>; pending: number }>();
 function runReport<T>(key: string, action: () => Promise<T>) {
-  let lock = reportLocks.get(key);
-  if (!lock) { lock = createMutex(); reportLocks.set(key, lock); }
-  return lock(action).finally(() => { /* 保留小量锁对象，日期键数量受报告数量约束 */ });
+  let entry = reportLocks.get(key);
+  if (!entry) { entry = { run: createMutex(), pending: 0 }; reportLocks.set(key, entry); }
+  entry.pending++;
+  return entry.run(action).finally(() => {
+    entry!.pending--;
+    if (entry!.pending === 0 && reportLocks.get(key) === entry) reportLocks.delete(key);
+  });
 }
 
 async function saveDraft(draft: DailyDraft) {

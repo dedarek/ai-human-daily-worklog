@@ -37,6 +37,8 @@ export async function atomicWriteFile(path: string, content: string | Buffer, mo
   const handle = await open(temporary, "r+");
   try { await handle.sync(); } finally { await handle.close(); }
   await rename(temporary, path);
+  const directory = await open(dirname(path), "r").catch(() => null);
+  if (directory) try { await directory.sync(); } finally { await directory.close(); }
 }
 
 async function withFileLock<T>(path: string, action: () => Promise<T>) {
@@ -45,12 +47,16 @@ async function withFileLock<T>(path: string, action: () => Promise<T>) {
   while (true) {
     try {
       const handle = await open(lock, "wx", 0o600);
+      await handle.writeFile(JSON.stringify({ pid: process.pid, createdAt: new Date().toISOString() }));
       try { return await action(); }
       finally { await handle.close(); await unlink(lock).catch(() => {}); }
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code !== "EEXIST") throw error;
+      const owner = await readFile(lock, "utf8").then(raw => JSON.parse(raw).pid as number).catch(() => 0);
+      let alive = false;
+      if (Number.isInteger(owner) && owner > 1) try { process.kill(owner, 0); alive = true; } catch { /* stale owner */ }
       const age = await stat(lock).then(info => Date.now() - info.mtimeMs).catch(() => 0);
-      if (age > 60_000) { await unlink(lock).catch(() => {}); continue; }
+      if (!alive && age > 10_000 || age > 10 * 60_000) { await unlink(lock).catch(() => {}); continue; }
       if (Date.now() >= deadline) throw new Error(`状态文件正被另一个 Worklog 进程占用：${path}`);
       await new Promise(resolve => setTimeout(resolve, 40));
     }

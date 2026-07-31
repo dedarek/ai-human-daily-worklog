@@ -105,9 +105,11 @@ fi
 
 chmod +x "$MACOS/Worklog" "$RESOURCES/runtime/node" "$RESOURCES/bin/"*
 if [[ "${WORKLOG_SKIP_ADHOC_SIGN:-0}" != "1" ]]; then
-  codesign --force --options runtime --timestamp=none --sign - --entitlements "$ROOT/macos/Node.entitlements" "$RESOURCES/runtime/node"
-  for binary in "$RESOURCES/bin/"*; do codesign --force --options runtime --timestamp=none --sign - "$binary"; done
-  codesign --force --options runtime --timestamp=none --sign - --entitlements "$ROOT/macos/Worklog.entitlements" "$APP"
+  # Developer ID is optional. Local builds stay ad-hoc signed unless the caller explicitly supplies an identity.
+  SIGN_IDENTITY="${WORKLOG_SIGN_IDENTITY:--}"
+  codesign --force --options runtime --timestamp=none --sign "$SIGN_IDENTITY" --identifier com.dedarek.worklog.runtime --entitlements "$ROOT/macos/Node.entitlements" "$RESOURCES/runtime/node"
+  for binary in "$RESOURCES/bin/"*; do codesign --force --options runtime --timestamp=none --sign "$SIGN_IDENTITY" --identifier "com.dedarek.worklog.helper.$(basename "$binary")" "$binary"; done
+  codesign --force --options runtime --timestamp=none --sign "$SIGN_IDENTITY" --entitlements "$ROOT/macos/Worklog.entitlements" "$APP"
   codesign --verify --deep --strict "$APP"
 fi
 echo "$APP"

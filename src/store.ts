@@ -1,19 +1,21 @@
 import { createHash, randomUUID } from "node:crypto";
 import { execFile, spawn } from "node:child_process";
 import { existsSync } from "node:fs";
-import { chmod, cp, mkdir, readFile, appendFile, readdir, rename, stat } from "node:fs/promises";
+import { chmod, cp, mkdir, readFile, appendFile, readdir, rename, rm, stat } from "node:fs/promises";
 import { promisify } from "node:util";
 import { join } from "node:path";
 import type { Secrets, Settings } from "./types.js";
 import { defaultDataDir, worklogPlatform } from "./platform.js";
-import { atomicWriteFile } from "./jsonStore.js";
+import { atomicWriteFile, createMutex } from "./jsonStore.js";
 
 const exec = promisify(execFile);
 const legacyDataDir = join(process.cwd(), "data");
 const platformDataDir = defaultDataDir();
 export const dataDir = process.env.WORKLOG_DATA_DIR || platformDataDir;
 const settingsFile = join(dataDir, "settings.json");
-const keychainService = "MacWorklogFeishu";
+const keychainService = "Worklog";
+const legacyKeychainService = "MacWorklogFeishu";
+const writeRunLog = createMutex();
 
 async function secureExistingData(root: string) {
   const marker = join(root, ".permissions-v1");
@@ -52,9 +54,10 @@ export const defaults: Settings = {
   teamsAutoRecord: worklogPlatform() === "macos",
   whisperCliPath: process.env.WORKLOG_BUNDLED_WHISPER_CLI || (worklogPlatform() === "windows" ? join(dataDir, "bin", "whisper-cli.exe") : worklogPlatform() === "linux" ? "/usr/local/bin/whisper-cli" : "/opt/homebrew/bin/whisper-cli"),
   whisperModelPath: join(dataDir, "models", "ggml-small.bin"),
-  retentionEnabled: false,
+  retentionEnabled: true,
   evidenceRetentionDays: 30,
   meetingAudioRetentionDays: 7,
+  meetingStorageLimitMb: 2048,
 };
 
 export async function setupStore() {
@@ -82,10 +85,10 @@ export async function saveSettings(settings: Settings) {
   await setupStore();
   await atomicWriteFile(settingsFile, JSON.stringify(settings, null, 2));
 }
-async function keychain(command: "add-generic-password" | "find-generic-password", account: string, value?: string) {
+async function keychain(command: "add-generic-password" | "find-generic-password", account: string, value?: string, service = keychainService) {
   const args = command === "add-generic-password"
-    ? [command, "-U", "-s", keychainService, "-a", account, "-w", value!]
-    : [command, "-s", keychainService, "-a", account, "-w"];
+    ? [command, "-U", "-s", service, "-a", account, "-w", value!]
+    : [command, "-s", service, "-a", account, "-w"];
   const { stdout } = await exec("security", args);
   return stdout.trim();
 }
@@ -126,7 +129,16 @@ export async function saveSecrets(secrets: Partial<Secrets>) {
 }
 export async function getSecrets(): Promise<Secrets> {
   if (worklogPlatform() === "macos") {
-    const fetch = async (name: string) => { try { return await keychain("find-generic-password", name); } catch { return ""; } };
+    const fetch = async (name: string) => {
+      try { return await keychain("find-generic-password", name); }
+      catch {
+        try {
+          const legacy = await keychain("find-generic-password", name, undefined, legacyKeychainService);
+          if (legacy) await keychain("add-generic-password", name, legacy);
+          return legacy;
+        } catch { return ""; }
+      }
+    };
     return { llmApiKey: await fetch("llm-api-key") };
   }
   if (worklogPlatform() === "windows") {
@@ -146,10 +158,15 @@ export async function getSecrets(): Promise<Secrets> {
 }
 export const sha256 = (text: string) => createHash("sha256").update(text).digest("hex");
 export async function logRun(entry: object) {
-  await setupStore();
-  const path = join(dataDir, "runs.jsonl");
-  const size = await stat(path).then(value => value.size).catch(() => 0);
-  if (size > 5 * 1024 * 1024) await rename(path, `${path}.1`).catch(() => {});
-  await appendFile(path, JSON.stringify({ id: randomUUID(), at: new Date().toISOString(), ...entry }) + "\n", { mode: 0o600 });
-  await chmod(path, 0o600).catch(() => {});
+  return writeRunLog(async () => {
+    await setupStore();
+    const path = join(dataDir, "runs.jsonl");
+    const size = await stat(path).then(value => value.size).catch(() => 0);
+    if (size > 5 * 1024 * 1024) {
+      await rm(`${path}.1`, { force: true });
+      await rename(path, `${path}.1`);
+    }
+    await appendFile(path, JSON.stringify({ id: randomUUID(), at: new Date().toISOString(), ...entry }) + "\n", { mode: 0o600 });
+    await chmod(path, 0o600).catch(() => {});
+  });
 }

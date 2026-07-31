@@ -20,11 +20,7 @@ struct SystemAudioCapture {
             return
         }
         do {
-            guard CGPreflightScreenCaptureAccess() || CGRequestScreenCaptureAccess() else {
-                fputs("需要“屏幕与系统音频录制”权限，无法采集电脑声音。\n", stderr)
-                exit(2)
-            }
-
+            // Node 在启动采集器前只做无弹窗的权限预检；这里绝不主动调用权限请求 API。
             let content = try await SCShareableContent.excludingDesktopWindows(false, onScreenWindowsOnly: false)
             guard let display = content.displays.first else {
                 fputs("没有找到可用于系统音频采集的显示器。\n", stderr)

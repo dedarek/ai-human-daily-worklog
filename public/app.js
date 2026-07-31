@@ -195,7 +195,11 @@ async function loadMeetingStatus() {
 }
 
 async function load() {
-  const [settings, status, setup] = await Promise.all([json("/api/settings"), json("/api/status"), json("/api/setup/status")]);
+  const [settingsResult, statusResult, setupResult] = await Promise.allSettled([json("/api/settings"), json("/api/status"), json("/api/setup/status")]);
+  if (settingsResult.status === "rejected") throw settingsResult.reason;
+  const settings = settingsResult.value;
+  const status = statusResult.status === "fulfilled" ? statusResult.value : { schedule: settings.schedule, weeklySchedule: settings.weeklySchedule, monthlySchedule: settings.monthlySchedule, morningSchedule: settings.morningSchedule };
+  const setup = setupResult.status === "fulfilled" ? setupResult.value : { ready: false, lark: { installed: false, error: setupResult.reason?.message || "状态检查暂时不可用" } };
   configuredTimezone = settings.timezone || configuredTimezone; updateFrameDate();
   for (const [key, value] of Object.entries(settings)) {
     const element = form.elements[key];
@@ -215,7 +219,9 @@ async function load() {
     $("#state").textContent = "工作采集已暂停";
     $("#dot").style.background = "#c64f37";
   }
-  await Promise.all([loadRuns(), loadMeetings(), loadMeetingStatus(), loadGraph(), loadDraft(), loadMorning()]);
+  const widgets = await Promise.allSettled([loadRuns(), loadMeetings(), loadMeetingStatus(), loadGraph(), loadDraft(), loadMorning()]);
+  const failed = widgets.filter(result => result.status === "rejected");
+  if (failed.length) $("#notice").textContent = `${failed.length} 个区域暂时无法更新，其余内容仍可使用。`;
 }
 
 form.addEventListener("submit", async event => {
@@ -306,5 +312,15 @@ $("#archiveAsk").addEventListener("click", async () => {
 });
 $("#archiveQuery").addEventListener("keydown", event => { if (event.key === "Enter") { event.preventDefault(); $("#archiveSearch").click(); } });
 initializeFrame();
-load().then(loadAudit).then(() => document.body.classList.add("is-ready")).catch(error => $("#notice").textContent = error.message);
-setInterval(() => { if (document.visibilityState === "visible") Promise.all([loadMeetingStatus(), loadMeetings()]).catch(() => {}); }, 5000);
+(async () => {
+  const results = await Promise.allSettled([load(), loadAudit()]);
+  const failure = results.find(result => result.status === "rejected");
+  if (failure) $("#notice").textContent = failure.reason?.message || "部分内容暂时无法加载。";
+  document.body.classList.add("is-ready");
+})();
+let meetingRefreshBusy = false;
+setInterval(async () => {
+  if (document.visibilityState !== "visible" || meetingRefreshBusy) return;
+  meetingRefreshBusy = true;
+  try { await Promise.allSettled([loadMeetingStatus(), loadMeetings()]); } finally { meetingRefreshBusy = false; }
+}, 10_000);

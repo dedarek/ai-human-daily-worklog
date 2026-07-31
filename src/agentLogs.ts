@@ -1,4 +1,4 @@
-import { readdir, readFile, stat } from "node:fs/promises";
+import { open, readdir, stat } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import { DatabaseSync } from "node:sqlite";
 import { join } from "node:path";
@@ -44,6 +44,19 @@ async function jsonlFiles(root: string): Promise<string[]> {
   await walk(root); return found;
 }
 
+async function recentJsonlFiles(root: string, cutoff: number, limit = 250) {
+  const entries = await Promise.all((await jsonlFiles(root)).map(async path => ({ path, info: await stat(path).catch(() => null) })));
+  return entries.filter(entry => entry.info && entry.info.mtimeMs >= cutoff).sort((a, b) => a.info!.mtimeMs - b.info!.mtimeMs).slice(-limit).map(entry => entry.path);
+}
+
+async function recentLines(path: string, maxBytes = 32 * 1024 * 1024) {
+  const info = await stat(path); const start = Math.max(0, info.size - maxBytes);
+  const handle = await open(path, "r"); const buffer = Buffer.alloc(info.size - start);
+  try { await handle.read(buffer, 0, buffer.length, start); } finally { await handle.close(); }
+  const lines = buffer.toString("utf8").split("\n"); if (start > 0) lines.shift();
+  return lines;
+}
+
 function claudeDetail(name: string, input: any) {
   if (name === "Bash") return `执行命令：${input?.command ?? input?.description ?? "（未提供摘要）"}`;
   if (["Read", "Write", "Edit", "MultiEdit"].includes(name)) return `${name} 文件：${input?.file_path ?? input?.path ?? "（未知路径）"}`;
@@ -57,9 +70,8 @@ async function claudeActivities(date: string, settings: Settings): Promise<Activ
   const activities: Activity[] = [];
   const usefulTools = new Set(["Bash", "Read", "Write", "Edit", "MultiEdit", "Agent", "TaskCreate", "Skill"]);
   const cutoff = Date.parse(`${date}T00:00:00Z`) - 24 * 3600 * 1000;
-  for (const file of await jsonlFiles(join(home, ".claude", "projects"))) {
-    try { if ((await stat(file)).mtimeMs < cutoff) continue; } catch { continue; }
-    let lines: string[]; try { lines = (await readFile(file, "utf8")).split("\n"); } catch { continue; }
+  for (const file of await recentJsonlFiles(join(home, ".claude", "projects"), cutoff)) {
+    let lines: string[]; try { lines = await recentLines(file); } catch { continue; }
     for (const line of lines) {
       if (!line) continue;
       try {
@@ -98,9 +110,8 @@ async function codexActivities(date: string, settings: Settings): Promise<Activi
   // WHY 扫全部 rollout 而非当天目录：ChatGPT/Codex app 会在已有线程里继续对话，
   // 而 rollout 文件按线程「创建日」命名，今天的消息常被追加进旧日期文件。用 mtime 剪枝再逐行按 timestamp 过滤。
   const cutoff = Date.parse(`${date}T00:00:00Z`) - 24 * 3600 * 1000;
-  for (const file of await jsonlFiles(join(home, ".codex", "sessions"))) {
-    try { if ((await stat(file)).mtimeMs < cutoff) continue; } catch { continue; }
-    let lines: string[]; try { lines = (await readFile(file, "utf8")).split("\n"); } catch { continue; }
+  for (const file of await recentJsonlFiles(join(home, ".codex", "sessions"), cutoff)) {
+    let lines: string[]; try { lines = await recentLines(file); } catch { continue; }
     for (const line of lines) {
       if (!line) continue;
       try {
