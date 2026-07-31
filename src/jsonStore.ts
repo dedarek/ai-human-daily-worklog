@@ -38,7 +38,16 @@ export async function atomicWriteFile(path: string, content: string | Buffer, mo
   try { await handle.sync(); } finally { await handle.close(); }
   await rename(temporary, path);
   const directory = await open(dirname(path), "r").catch(() => null);
-  if (directory) try { await directory.sync(); } finally { await directory.close(); }
+  if (directory) {
+    try {
+      // Directory fsync is supported on macOS/Linux but returns EPERM/EINVAL
+      // on Windows. The file itself was already synced before the rename.
+      await directory.sync();
+    } catch (error) {
+      const code = (error as NodeJS.ErrnoException).code;
+      if (!(["EPERM", "EINVAL", "ENOTSUP", "EISDIR"] as string[]).includes(code ?? "")) throw error;
+    } finally { await directory.close(); }
+  }
 }
 
 async function withFileLock<T>(path: string, action: () => Promise<T>) {
