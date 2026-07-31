@@ -12,6 +12,7 @@ const home = homedir();
 
 // 从各 agent 日志提取真实用户提问时，剔除系统注入内容（环境上下文、命令回显、工具结果、元消息）与低信号短语。
 const STOP_PROMPTS = new Set(["继续", "ok", "好的", "嗯", "是的", "可以", "行", "对", "yes", "y", "go", "next", "对的", "嗯嗯"]);
+const SYSTEM_PROMPT_NOISE = /<task-(?:notification|result)\b|<task-id\b|background agent .* was stopped by the user|<notification\b/i;
 export function cleanPrompt(text: unknown): string {
   let source = String(text ?? "");
   const requestMarker = source.lastIndexOf("## My request for Codex:");
@@ -19,6 +20,7 @@ export function cleanPrompt(text: unknown): string {
   source = source.replace(/<(?:in-app-browser-context|environment_context|system-reminder)[^>]*>[\s\S]*?<\/(?:in-app-browser-context|environment_context|system-reminder)>/gi, " ");
   const raw = source.replace(/\s+/g, " ").trim();
   if (!raw || raw.length < 3) return "";
+  if (SYSTEM_PROMPT_NOISE.test(raw)) return "";
   if (/^(command-name|local-command|environment_context|system-reminder)/i.test(raw)) return "";
   if (STOP_PROMPTS.has(raw.toLowerCase())) return "";
   return raw;
