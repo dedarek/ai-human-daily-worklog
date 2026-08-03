@@ -30,3 +30,9 @@ test("work graph cards contain long commands instead of letting them escape", as
   assert.match(css, /\.chain-title b\{[^}]*overflow-wrap:anywhere/);
   assert.match(css, /\.chain p\{[^}]*overflow-wrap:anywhere/);
 });
+
+test("Teams permission is presented as optional for core setup", async () => {
+  const source = await readFile(join(process.cwd(), "public", "setup.js"), "utf8");
+  assert.ok(source.includes("Teams 系统音频（可稍后开启）"));
+  assert.ok(source.includes("const steps = [true,"));
+});

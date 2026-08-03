@@ -89,8 +89,7 @@ export async function onboardingStatus() {
   const meetingRequired = capabilities.teamsSystemAudio && settings.teamsMeetingEnabled;
   const meetingReady = !meetingRequired || Boolean(whisperCli && model.verified);
   const destinationReady = settings.markdownOutputEnabled || ((lark as any).verified === true && Boolean(settings.feishuWikiNodeToken));
-  // 辅助功能只提升窗口标题质量，不应阻止核心采集；Teams 启用时系统音频权限才是必需项。
-  const permissionsReady = !meetingRequired || screen.screenCapture === true;
+  // 系统权限仅决定 Teams 音频是否可用，绝不应把已配置的工作日志、日报和飞书归档重新送回初始化流程。
   return {
     platform: worklogPlatform(),
     capabilities,
@@ -100,7 +99,7 @@ export async function onboardingStatus() {
     llmConfigured: Boolean(secrets.llmApiKey && settings.llmBaseUrl && settings.llmModel),
     wikiConfigured: Boolean(settings.feishuWikiNodeToken),
     whisper: { required: meetingRequired, cliInstalled: Boolean(whisperCli), cliPath: whisperCli || "", model, download: downloadState },
-    complete: permissionsReady && Boolean(secrets.llmApiKey && meetingReady && destinationReady),
+    complete: Boolean(secrets.llmApiKey && meetingReady && destinationReady),
   };
 }
 

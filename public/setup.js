@@ -17,7 +17,7 @@ async function refresh() {
   const platformName = ({ macos: "macOS", windows: "Windows", linux: "Linux" })[status.platform] || status.platform;
   $("#platformIntro").textContent = `正在配置 ${platformName} 版本。所有采集记录只保存在这台电脑。`;
   $("#permissionHelp").textContent = status.permissions.required
-    ? "系统音频用于 Teams 会议；辅助功能用于识别前台应用和会议窗口。Worklog 不读取麦克风、键盘或屏幕画面。"
+    ? "系统音频仅用于 Teams 会议；辅助功能用于识别前台应用和会议窗口。它们不会阻止工作日志、日报或飞书归档，需用会议记录时再开启即可。"
     : "当前平台无需 macOS 辅助功能权限；Worklog 读取前台应用和窗口名称，但不读取键盘、剪贴板或页面正文。";
   stateText($("#screenState"), status.permissions.screenCapture, status.permissions.required ? "已允许" : "当前平台无需授权", "等待系统授权");
   stateText($("#accessibilityState"), status.permissions.accessibility, status.permissions.required ? "已允许" : "当前平台无需授权", "等待系统授权");
@@ -44,7 +44,7 @@ async function refresh() {
 
   const permissionReady = !status.whisper.required || status.permissions.screenCapture;
   const checks = [
-    [permissionReady, status.whisper.required ? "Teams 系统音频权限" : "基础采集权限"],
+    [permissionReady, status.whisper.required ? "Teams 系统音频（可稍后开启）" : "基础采集权限"],
     [larkVerified, "飞书用户授权"],
     [status.llmConfigured, "LLM 配置"],
     [status.wikiConfigured, "知识库位置"],
@@ -52,7 +52,7 @@ async function refresh() {
   ];
   $("#summary").innerHTML = checks.map(([ok, label]) => `<span class="${ok ? "ok" : "warn"}">${ok ? "✓" : "○"} ${label}</span>`).join("　");
   $("#finishSetup").disabled = !status.complete;
-  const steps = [checks[0][0], larkVerified || settings.markdownOutputEnabled, status.llmConfigured && (status.wikiConfigured || settings.markdownOutputEnabled) && checks[4][0], status.complete];
+  const steps = [true, larkVerified || settings.markdownOutputEnabled, status.llmConfigured && (status.wikiConfigured || settings.markdownOutputEnabled) && checks[4][0], status.complete];
   const active = steps.findIndex(done => !done);
   document.querySelectorAll("#progress span").forEach((item, index) => item.className = steps[index] ? "done" : index === (active < 0 ? 3 : active) ? "active" : "");
   if (status.complete && location.pathname === "/setup.html") {
