@@ -52,8 +52,16 @@ export async function findLarkCli(configured?: string) {
   const candidates = [configured, process.env.LARK_CLI_PATH, process.env.WORKLOG_BUNDLED_LARK_CLI, appDataCli, "/opt/homebrew/bin/lark-cli", "/usr/local/bin/lark-cli", ...(await nvmCandidates())].filter(Boolean) as string[];
   let found: string | undefined;
   for (const candidate of candidates) {
-    try { await access(candidate, process.platform === "win32" ? constants.F_OK : constants.X_OK); found = await bundledCli(candidate); break; }
-    catch { /* try next candidate */ }
+    try {
+      await access(candidate, process.platform === "win32" ? constants.F_OK : constants.X_OK);
+      let resolved = candidate;
+      if (process.platform === "win32" && candidate.toLowerCase().endsWith(".cmd")) {
+        const directScript = join(dirname(candidate), "node_modules", "@larksuite", "cli", "scripts", "run.js");
+        try { await access(directScript, constants.F_OK); resolved = directScript; } catch { /* use shim */ }
+      }
+      found = await bundledCli(resolved);
+      break;
+    } catch { /* try next candidate */ }
   }
   if (!found) throw new Error("未找到飞书 CLI。请先运行：npm install -g @larksuite/cli");
   return found;
