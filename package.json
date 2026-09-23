@@ -29,15 +29,20 @@
     "install-service": "./scripts/install-launch-agent.sh",
     "desktop": "npm run build && electron .",
     "build-windows": "npm run build && electron-builder --win nsis --x64 --publish never",
-    "build-linux": "npm run build && electron-builder --linux AppImage deb --x64 --publish never"
+    "build-linux": "npm run build && electron-builder --linux AppImage deb --x64 --publish never",
+    "mcp": "tsx src/mcp.ts",
+    "mcp:dist": "node dist/mcp.js",
+    "smoke:mcp": "npm run build && node scripts/smoke-mcp.mjs"
   },
   "engines": {
     "node": ">=22.13"
   },
   "dependencies": {
     "@larksuite/cli": "1.0.80",
+    "@modelcontextprotocol/sdk": "^1.30.0",
     "express": "^5.1.0",
-    "node-cron": "^4.2.1"
+    "node-cron": "^4.2.1",
+    "zod": "^4.6.5"
   },
   "devDependencies": {
     "@types/express": "^5.0.3",
